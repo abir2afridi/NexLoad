@@ -5,7 +5,7 @@
 
 import React, { useEffect } from "react";
 import { useAppStore } from "../stores/useAppStore";
-import { X, Sliders, RefreshCw, Eye, Shield, HardDrive, Info } from "lucide-react";
+import { X, Sliders, RefreshCw, Eye, Shield, HardDrive, Info, Moon, Sun, Monitor } from "lucide-react";
 
 const ACCENT_PRESETS = [
   { name: "Royal Purple", value: "#7C3AED" },
@@ -25,6 +25,8 @@ export const SettingsModal: React.FC = () => {
     resetSettings,
     isSettingsOpen,
     setSettingsOpen,
+    themeMode,
+    setThemeMode,
   } = useAppStore();
 
   // Dynamic CSS injector for the custom accent color variable (Part 5.4 system)
@@ -61,15 +63,44 @@ export const SettingsModal: React.FC = () => {
         {/* Modal scrolling contents */}
         <div className="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 text-sm">
           
-          {/* Section 1: Appearance & Branding (Accent selector) */}
+          {/* Section 1: Appearance & Branding (Theme + Accent) */}
           <div className="flex flex-col gap-3">
             <h4 className="text-xs font-mono uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-              <Eye className="w-3.5 h-3.5 text-brand-accent" /> Dynamic Visual Accents
+              <Eye className="w-3.5 h-3.5 text-brand-accent" /> Appearance
             </h4>
-            <div className="p-5 bg-zinc-950/40 border border-zinc-900/60 rounded-2xl shadow-inner">
-              <span className="text-xs text-zinc-400 block mb-3.5 font-mono">
-                Select predefined brand palettes or type a custom Hex color value:
-              </span>
+            <div className="p-5 bg-zinc-950/40 border border-zinc-900/60 rounded-2xl shadow-inner flex flex-col gap-4">
+              {/* Theme mode selector */}
+              <div>
+                <span className="text-xs text-zinc-400 block mb-3 font-mono">
+                  Theme Mode:
+                </span>
+                <div className="flex gap-2">
+                  {[
+                    { mode: "dark", icon: Moon, label: "Dark" },
+                    { mode: "light", icon: Sun, label: "Light" },
+                    { mode: "system", icon: Monitor, label: "System" },
+                  ].map(({ mode, icon: Icon, label }) => (
+                    <button
+                      key={mode}
+                      onClick={() => setThemeMode(mode as "dark" | "light" | "system")}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-medium transition-all duration-300 cursor-pointer ${
+                        themeMode === mode
+                          ? "bg-brand-accent/20 border-brand-accent text-white shadow-[0_0_15px_rgba(124,58,237,0.15)]"
+                          : "bg-zinc-900/40 border-zinc-900 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700"
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Accent color selector */}
+              <div>
+                <span className="text-xs text-zinc-400 block mb-3.5 font-mono">
+                  Select predefined brand palettes or type a custom Hex color value:
+                </span>
               <div className="flex flex-wrap gap-2.5">
                 {ACCENT_PRESETS.map((col) => (
                   <button
@@ -98,6 +129,7 @@ export const SettingsModal: React.FC = () => {
                   onChange={(e) => updateSettings({ accentColor: e.target.value })}
                   className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs font-mono text-zinc-200 focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 focus:outline-none w-32 uppercase transition-all"
                 />
+              </div>
               </div>
             </div>
           </div>

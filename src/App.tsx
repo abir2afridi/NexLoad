@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAppStore } from "./stores/useAppStore";
 import { BrandLogo } from "./components/BrandLogo";
@@ -46,6 +46,7 @@ function DownloaderDashboard() {
     setAnalysisError,
     setSettingsOpen,
     setAboutOpen,
+    themeMode,
   } = useAppStore();
 
   const [hasAnimationShake, setHasAnimationShake] = useState<boolean>(false);
@@ -108,6 +109,22 @@ function DownloaderDashboard() {
       alert("Unable to access system clipboard. Please paste manually using Ctrl+V or Command+V.");
     }
   };
+
+  // Sync themeMode to data-theme attribute on <html>
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
+
+    const applyTheme = () => {
+      const effective = themeMode === "system"
+        ? (mediaQuery.matches ? "light" : "dark")
+        : themeMode;
+      document.documentElement.setAttribute("data-theme", effective);
+    };
+
+    applyTheme();
+    mediaQuery.addEventListener("change", applyTheme);
+    return () => mediaQuery.removeEventListener("change", applyTheme);
+  }, [themeMode]);
 
   return (
     <div className="min-h-screen relative overflow-hidden pb-32" id="nexload-app-root">
