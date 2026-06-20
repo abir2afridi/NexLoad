@@ -1,0 +1,6 @@
+{
+  "name": "NexLoad",
+  "description": "Download anything. Instantly. A client-first media downloader inspired by Cobalt, powered by an intelligent Gemini-driven URL analysis, recommendations, and integrated media browser.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
