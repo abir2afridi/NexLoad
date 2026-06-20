@@ -8,10 +8,28 @@ import path from "path";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { createServer as createViteServer } from "vite";
+import { spawn } from "child_process";
+import fs from "fs";
+import os from "os";
 import { DownloadState, MediaMetadata, SearchResultItem, MediaFormat } from "./src/types";
 
 const app = express();
 const PORT = 3000;
+
+const DOWNLOAD_DIR = path.join(os.tmpdir(), "nexload-downloads");
+fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
+
+const YTDLP_PATH = (() => {
+  const candidates = [
+    path.join(os.homedir(), "AppData", "Roaming", "Python", "Python313", "Scripts", "yt-dlp.exe"),
+    "yt-dlp",
+    "yt-dlp.exe",
+  ];
+  for (const c of candidates) {
+    try { if (fs.existsSync(c)) return c; } catch {}
+  }
+  return "yt-dlp";
+})();
 
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "5mb" }));
@@ -384,8 +402,8 @@ interface ActiveJob {
   error?: string;
   downloadUrl?: string;
   createdAt: number;
-  contentData?: Buffer;
-  fileName?: string;
+  fileName: string;
+  filePath?: string;
 }
 
 const activeJobsStore = new Map<string, ActiveJob>();
@@ -482,6 +500,262 @@ app.post("/api/search", searchLimiter, async (req, res) => {
   }
 });
 
+function u32(v: number): Buffer {
+  const b = Buffer.alloc(4); b.writeUInt32BE(v, 0); return b;
+}
+function u16(v: number): Buffer {
+  const b = Buffer.alloc(2); b.writeUInt16BE(v, 0); return b;
+}
+function u8(v: number): Buffer {
+  const b = Buffer.alloc(1); b[0] = v; return b;
+}
+function box(type: string, content: Buffer): Buffer {
+  return Buffer.concat([u32(8 + content.length), Buffer.from(type, "ascii"), content]);
+}
+function fullBox(type: string, ver: number, flags: number, content: Buffer): Buffer {
+  return box(type, Buffer.concat([u8(ver), u32(flags).subarray(1), content]));
+}
+function f16(v: number): Buffer {
+  const int = Math.floor(v); const frac = Math.round((v - int) * 65536);
+  return Buffer.concat([u16(int), u16(frac)]);
+}
+function f8(v: number): Buffer {
+  const int = Math.floor(v); const frac = Math.round((v - int) * 256);
+  return Buffer.concat([u16((int << 8) | Math.min(frac, 255))]);
+}
+
+function generateMockFileContent(ext: string): Buffer {
+  const extLc = ext.toLowerCase();
+  switch (extLc) {
+    case "mp4":
+    case "m4v":
+    case "mov":
+    case "3gp": {
+      const isQtv = extLc === "mov";
+      const majorBrand = isQtv ? "qt  " : "isom";
+      const brands = isQtv ? ["qt  "] : ["isom", "iso2", "mp41"];
+      const ftypContent = Buffer.concat([
+        Buffer.from(majorBrand, "ascii"), u32(0x00000200),
+        Buffer.from(brands.join(""), "ascii"),
+      ]);
+      // mvhd: movie header
+      const mvhd = fullBox("mvhd", 0, 0, Buffer.concat([
+        u32(0), u32(0), u32(90000), u32(0),
+        f16(1), f8(1), Buffer.alloc(10), Buffer.alloc(36), Buffer.alloc(24), u32(1),
+      ]));
+      // tkhd: track header (zero duration, no width/height)
+      const tkhd = fullBox("tkhd", 0, 0x0003, Buffer.concat([
+        u32(0), u32(0), u32(1), u32(0), u32(0),
+        Buffer.alloc(8), u16(0), u16(0), f8(0), u16(0),
+        Buffer.alloc(36), f16(0), f16(0),
+      ]));
+      // mdhd: media header
+      const mdhd = fullBox("mdhd", 0, 0, Buffer.concat([
+        u32(0), u32(0), u32(90000), u32(0), u16(0x55C4), u16(0),
+      ]));
+      // hdlr: handler reference (video)
+      const hdlr = fullBox("hdlr", 0, 0, Buffer.concat([
+        u32(0), Buffer.from("vide", "ascii"), Buffer.alloc(12), u8(0),
+      ]));
+      // vmhd: video media header
+      const vmhd = fullBox("vmhd", 0, 1, Buffer.alloc(8));
+      // dref: data reference (self-contained)
+      const urlBox = box("url ", Buffer.concat([u8(0), u32(1).subarray(1)]));
+      const dref = fullBox("dref", 0, 0, Buffer.concat([u32(1), urlBox]));
+      // stsd: sample description (1 empty entry)
+      const visualEntry = Buffer.concat([
+        Buffer.alloc(6), u16(1), u16(0), Buffer.alloc(16),
+        u16(1), u16(1), f16(72), f16(72), u32(0), u16(1),
+        Buffer.alloc(32), u16(24), u16(0xFFFF),
+      ]);
+      const stsd = fullBox("stsd", 0, 0, Buffer.concat([u32(1), visualEntry]));
+      // stts, stsc, stsz, stco: empty sample tables
+      const stts = fullBox("stts", 0, 0, u32(0));
+      const stsc = fullBox("stsc", 0, 0, u32(0));
+      const stsz = fullBox("stsz", 0, 0, Buffer.concat([u32(0), u32(0)]));
+      const stco = fullBox("stco", 0, 0, u32(0));
+      const stbl = box("stbl", Buffer.concat([stsd, stts, stsc, stsz, stco]));
+      const minf = box("minf", Buffer.concat([vmhd, box("dinf", dref), stbl]));
+      const mdia = box("mdia", Buffer.concat([mdhd, hdlr, minf]));
+      const trak = box("trak", Buffer.concat([tkhd, mdia]));
+      const moov = box("moov", Buffer.concat([mvhd, trak]));
+      return Buffer.concat([box("ftyp", ftypContent), moov]);
+    }
+    case "webm":
+    case "mkv": {
+      const docType = extLc === "webm" ? "webm" : "matroska";
+      const ebml = Buffer.from([
+        0x1A, 0x45, 0xDF, 0xA3, // EBML header
+        0x86, 0x81, 0x01, // EBMLVersion = 1
+        0x42, 0xF7, 0x81, 0x01, // EBMLReadVersion = 1
+        0x42, 0xF2, 0x81, 0x04, // EBMLMaxIDLength = 4
+        0x42, 0xF3, 0x81, 0x08, // EBMLMaxSizeLength = 8
+        0x42, 0x82,
+      ]);
+      const docTypeBuf = Buffer.from(docType, "ascii");
+      const docTypeLen = u8(docTypeBuf.length);
+      const docTypePart = Buffer.concat([docTypeLen, docTypeBuf, u32(1).subarray(1), u32(1).subarray(1)]);
+      return Buffer.concat([ebml, Buffer.from([0x84]), docTypePart, Buffer.from([0x1C, 0x53, 0xBB, 0x6B])]);
+    }
+    case "avi": {
+      const riffSize = u32(0);
+      const aviHeader = Buffer.from([
+        0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x41, 0x56, 0x49, 0x20,
+        0x4C, 0x49, 0x53, 0x54, 0x00, 0x00, 0x00, 0x00, 0x68, 0x64, 0x72, 0x6C, 0x61, 0x76, 0x69, 0x68,
+      ]);
+      return Buffer.concat([aviHeader, Buffer.alloc(64)]);
+    }
+    case "mp3": {
+      const frames: Buffer[] = [];
+      for (let s = 0; s < 300; s += 1152) {
+        frames.push(Buffer.from([
+          0xFF, 0xFB, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ]));
+      }
+      return Buffer.concat(frames);
+    }
+    case "wav": {
+      const dataSize = 16000;
+      const fmt = Buffer.concat([
+        Buffer.from("fmt ", "ascii"), u32(16), u16(1), u16(1),
+        u32(8000), u32(16000), u16(2), u16(16),
+      ]);
+      const data = Buffer.concat([
+        Buffer.from("data", "ascii"), u32(dataSize), Buffer.alloc(dataSize),
+      ]);
+      const riff = Buffer.concat([
+        Buffer.from("RIFF", "ascii"),
+        u32(36 + dataSize), Buffer.from("WAVE", "ascii"), fmt, data,
+      ]);
+      return riff;
+    }
+    case "flac": {
+      return Buffer.from([
+        0x66, 0x4C, 0x61, 0x43, 0x00, 0x00, 0x00, 0x22,
+        0x12, 0x00, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      ]);
+    }
+    case "ogg":
+    case "opus": {
+      return Buffer.from([
+        0x4F, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x72, 0x76,
+        0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      ]);
+    }
+    case "aac": {
+      return Buffer.alloc(2048, 0xFF);
+    }
+    case "jpg":
+    case "jpeg": {
+      return Buffer.from([
+        0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46,
+        0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
+        0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43,
+        0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08,
+        0x07, 0x07, 0x07, 0x09, 0x09, 0x08, 0x0A, 0x0C,
+        0x14, 0x0D, 0x0C, 0x0B, 0x0B, 0x0C, 0x19, 0x12,
+        0x13, 0x0F, 0x14, 0x1D, 0x1A, 0x1F, 0x1E, 0x1D,
+        0x1A, 0x1C, 0x1C, 0x20, 0x24, 0x2E, 0x27, 0x20,
+        0x22, 0x2C, 0x23, 0x1C, 0x1C, 0x28, 0x37, 0x29,
+        0x2C, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1F, 0x27,
+        0x39, 0x3D, 0x38, 0x32, 0x3C, 0x2E, 0x33, 0x34,
+        0x32, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01,
+        0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xFF, 0xC4,
+        0x00, 0x1F, 0x00, 0x00, 0x01, 0x05, 0x01, 0x01,
+        0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04,
+        0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0xFF,
+        0xC4, 0x00, 0xB5, 0x10, 0x00, 0x02, 0x01, 0x03,
+        0x03, 0x02, 0x04, 0x03, 0x05, 0x05, 0x04, 0x04,
+        0x00, 0x00, 0x00, 0x00, 0x01, 0x7D, 0x01, 0x02,
+        0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21, 0x31,
+        0x41, 0x06, 0x13, 0x51, 0x61, 0x07, 0x22, 0x71,
+        0x14, 0x32, 0x81, 0x91, 0xA1, 0x08, 0x23, 0x42,
+        0xB1, 0xC1, 0x15, 0x52, 0xD1, 0xF0, 0x24, 0x33,
+        0x62, 0x72, 0x82, 0x09, 0x0A, 0x16, 0x17, 0x18,
+        0x19, 0x1A, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A,
+        0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x43,
+        0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x53,
+        0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x63,
+        0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x73,
+        0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x83,
+        0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x92,
+        0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A,
+        0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9,
+        0xAA, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8,
+        0xB9, 0xBA, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7,
+        0xC8, 0xC9, 0xCA, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6,
+        0xD7, 0xD8, 0xD9, 0xDA, 0xE1, 0xE2, 0xE3, 0xE4,
+        0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xF1, 0xF2,
+        0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA,
+        0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00,
+        0x3F, 0x00, 0xFF, 0xD9,
+      ]);
+    }
+    case "png": {
+      const crc32 = (buf: Buffer): number => {
+        let c = 0xFFFFFFFF;
+        for (let n = 0; n < buf.length; n++) {
+          c ^= buf[n];
+          for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (c & 1 ? 0xEDB88320 : 0);
+        }
+        return (c ^ 0xFFFFFFFF) >>> 0;
+      };
+      const ihdr = Buffer.concat([
+        Buffer.from("IHDR", "ascii"),
+        u32(1), u32(1), u8(8), u8(2), u8(0), u8(0), u8(0),
+      ]);
+      const ihdrChunk = Buffer.concat([
+        u32(13), ihdr, u32(crc32(ihdr)),
+      ]);
+      const idatRaw = Buffer.from([0x08, 0x1D, 0x01, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x0F, 0xFC, 0xD9]);
+      const idat = Buffer.concat([
+        Buffer.from("IDAT", "ascii"), u32(idatRaw.length), idatRaw, u32(crc32(Buffer.concat([Buffer.from("IDAT", "ascii"), idatRaw]))),
+      ]);
+      const iend = Buffer.concat([
+        Buffer.from("IEND", "ascii"), u32(0), u32(crc32(Buffer.from("IEND", "ascii"))),
+      ]);
+      return Buffer.concat([Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), ihdrChunk, idat, iend]);
+    }
+    case "gif": {
+      return Buffer.from([
+        0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00,
+        0x01, 0x00, 0x80, 0x00, 0x00, 0xFF, 0xFF, 0xFF,
+        0x00, 0x00, 0x00, 0x21, 0xF9, 0x04, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x2C, 0x00, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44,
+        0x01, 0x00, 0x3B,
+      ]);
+    }
+    case "webp": {
+      return Buffer.from([
+        0x52, 0x49, 0x46, 0x46, 0x2A, 0x00, 0x00, 0x00,
+        0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20,
+        0x1E, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00,
+        0x04, 0x04, 0x00, 0x00, 0x2D, 0x01, 0x00, 0x00,
+        0xFE, 0x08, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+        0x80, 0x00,
+      ]);
+    }
+    default:
+      return Buffer.from(`NexLoad simulated download for .${ext} format.`, "utf-8");
+  }
+}
+
 app.post("/api/jobs/create", downloadLimiter, (req, res) => {
   const { url, title, thumbnail, platform, formatId, quality, sizeLabel, ext } = req.body;
 
@@ -510,55 +784,80 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
 
   activeJobsStore.set(jobId, activeJob);
 
-  const simulationInterval = setInterval(() => {
-    const job = activeJobsStore.get(jobId);
-    if (!job) { clearInterval(simulationInterval); return; }
-    if (job.state === DownloadState.COMPLETED || job.state === DownloadState.FAILED) {
-      clearInterval(simulationInterval);
-      return;
-    }
+  const outTemplate = path.join(DOWNLOAD_DIR, `${jobId}_%(title)s.%(ext)s`);
+  const extArg = ext || "mp4";
 
-    if (job.progress < 100) {
-      if (job.progress < 15) {
-        job.state = DownloadState.FETCHING_METADATA;
-        job.progress += 3;
-      } else if (job.progress < 30) {
-        job.state = DownloadState.ANALYZING;
-        job.progress += 4;
-      } else if (job.progress < 60) {
-        job.state = DownloadState.PROCESSING;
-        job.progress += 6;
-      } else {
-        job.state = DownloadState.DOWNLOADING;
-        job.progress += 8;
-        job.speedMbps = parseFloat((15 + Math.random() * 45).toFixed(1));
-        job.etaSeconds = Math.max(1, Math.round((100 - job.progress) / 4));
+  const ytdlpArgs = [
+    url,
+    "-o", outTemplate,
+    "--no-playlist",
+    "--newline",
+    "--no-check-certificates",
+  ];
+
+  if (["mp4", "m4v", "mkv", "webm", "avi", "mov"].includes(extArg)) {
+    ytdlpArgs.push("-f", "bestvideo+bestaudio/best", "--merge-output-format", extArg);
+  } else if (["mp3", "wav", "flac", "aac", "opus", "ogg"].includes(extArg)) {
+    ytdlpArgs.push("-x", "--audio-format", extArg);
+  } else {
+    ytdlpArgs.push("-f", "best");
+  }
+
+  console.log(`[yt-dlp] Spawning: ${YTDLP_PATH} ${ytdlpArgs.join(" ")}`);
+  const proc = spawn(YTDLP_PATH, ytdlpArgs, { windowsHide: true });
+
+  let stderrData = "";
+  proc.stdout.on("data", (chunk: Buffer) => {
+    const line = chunk.toString();
+    const match = line.match(/(\d+\.?\d*)%/);
+    if (match) {
+      const pct = Math.min(99, parseFloat(match[1]));
+      const job = activeJobsStore.get(jobId);
+      if (job) {
+        job.progress = pct;
+        job.state = pct < 30 ? DownloadState.ANALYZING : DownloadState.DOWNLOADING;
+        activeJobsStore.set(jobId, job);
       }
+    }
+  });
 
-      if (job.progress >= 100) {
+  proc.stderr.on("data", (chunk: Buffer) => { stderrData += chunk.toString(); });
+
+  proc.on("close", (code) => {
+    const job = activeJobsStore.get(jobId);
+    if (!job) return;
+
+    if (code === 0) {
+      const files = fs.readdirSync(DOWNLOAD_DIR).filter(f => f.startsWith(jobId)).sort();
+      if (files.length > 0) {
+        const filePath = path.join(DOWNLOAD_DIR, files[0]);
+        const stat = fs.statSync(filePath);
         job.progress = 100;
         job.state = DownloadState.COMPLETED;
         job.speedMbps = 0;
         job.etaSeconds = 0;
         job.downloadUrl = `/api/download/${jobId}`;
-        const dummyText = [
-          `NexLoad Media Download`,
-          `======================`,
-          `Title: ${job.title}`,
-          `Platform: ${job.platform}`,
-          `Format: ${job.formatId}`,
-          `URL: ${job.url}`,
-          `Downloaded: ${new Date().toISOString()}`,
-          ``,
-          `This is a simulated download file from NexLoad.`,
-          `In production, this would contain the actual media stream.`,
-        ].join("\n");
-        job.contentData = Buffer.from(dummyText, "utf-8");
+        job.filePath = filePath;
+        job.fileName = files[0].replace(new RegExp(`^${jobId}_`), "");
+        job.fileSizeLabel = `${(stat.size / (1024 * 1024)).toFixed(1)} MB`;
+      } else {
+        job.state = DownloadState.FAILED;
+        job.error = "Download completed but file not found on disk.";
       }
-
-      activeJobsStore.set(jobId, job);
+    } else {
+      job.state = DownloadState.FAILED;
+      job.error = stderrData.substring(0, 200) || `yt-dlp exited with code ${code}`;
     }
-  }, 800);
+    activeJobsStore.set(jobId, job);
+  });
+
+  proc.on("error", (err) => {
+    const job = activeJobsStore.get(jobId);
+    if (!job) return;
+    job.state = DownloadState.FAILED;
+    job.error = `Failed to start download: ${err.message}`;
+    activeJobsStore.set(jobId, job);
+  });
 
   res.status(202).json({ jobId, message: "Download job queued successfully." });
 });
@@ -629,13 +928,26 @@ app.get("/api/download/:jobId", (req, res) => {
   const { jobId } = req.params;
   const job = activeJobsStore.get(jobId);
 
-  if (!job || !job.contentData) {
+  if (!job || !job.filePath) {
     return res.status(404).send("Download asset not found or expired from server cache.");
   }
 
+  if (!fs.existsSync(job.filePath)) {
+    return res.status(404).send("Download file no longer exists on server.");
+  }
+
+  const mimeType: Record<string, string> = {
+    mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm", mkv: "video/x-matroska",
+    avi: "video/x-msvideo", mov: "video/quicktime",
+    mp3: "audio/mpeg", wav: "audio/wav", flac: "audio/flac", aac: "audio/aac",
+    opus: "audio/opus", ogg: "audio/ogg",
+    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
+    webp: "image/webp",
+  };
+  const ext = job.fileName.split(".").pop() || "";
   res.setHeader("Content-Disposition", `attachment; filename="${job.fileName}"`);
-  res.setHeader("Content-Type", "application/octet-stream");
-  res.send(job.contentData);
+  res.setHeader("Content-Type", mimeType[ext] || "application/octet-stream");
+  res.sendFile(job.filePath);
 });
 
 app.get("/api/platforms", (_req, res) => {
