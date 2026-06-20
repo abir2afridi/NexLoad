@@ -1,91 +1,178 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Brutalist Cyberpunk / Neo-Tokyo Minimalist Design System
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;750&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Roboto+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;750&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Oswald", sans-serif;
+  --font-body: "Roboto Condensed", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 }
 
 :root {
-  --brand-accent: #7C3AED; /* Default purple */
-  --font-brand-accent: #7C3AED;
+  --brand-accent: #ff5b00;
+  --font-brand-accent: #ff5b00;
+  --grid-color: rgba(255, 255, 255, 0.03);
+  --scanline-color: rgba(255, 91, 0, 0.06);
 }
 
-/* Elegant dark ambient system styling */
+/* ─── BASE ─── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 91, 0, 0.3) transparent;
+}
+
 body {
-  background-color: #030303;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 24px 24px;
-  color: #f4f4f5;
-  font-family: var(--font-sans);
+  background-color: #000000;
+  background-image:
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+  background-size: 48px 48px;
+  color: #e4e4e7;
+  font-family: var(--font-body);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.5s ease, color 0.5s ease;
 }
 
-/* Beautiful cinematic spotlight simulation */
-body::before {
+/* ─── SCANLINE OVERLAY ─── */
+.scanline-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  overflow: hidden;
+}
+
+.scanline-overlay::before {
   content: "";
   position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100vw;
-  height: 500px;
-  background: radial-gradient(circle, rgba(124, 58, 237, 0.065) 0%, rgba(124, 58, 237, 0) 70%);
+  width: 100%;
+  height: 2px;
+  background: var(--scanline-color);
+  animation: scanlineMove 8s linear infinite;
+}
+
+@keyframes scanlineMove {
+  0% { top: -2px; }
+  100% { top: 100vh; }
+}
+
+/* ─── FLOATING WATERMARK ─── */
+.watermark {
+  position: fixed;
+  font-size: 25vw;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.025);
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
+  user-select: none;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  line-height: 1;
+  transition: color 0.5s ease;
 }
 
-/* Glassmorphic card design and highlights */
-.glass-panel {
-  background: rgba(8, 8, 10, 0.7);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+/* ─── FLOATING VERTICAL BADGES ─── */
+.badge-vertical {
+  position: fixed;
+  top: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  color: rgba(255, 255, 255, 0.15);
+  text-transform: uppercase;
+  pointer-events: none;
+  transition: color 0.5s ease;
+}
+
+.badge-vertical .badge-line {
+  width: 40px;
+  height: 1px;
+  background: rgba(255, 91, 0, 0.4);
+}
+
+.badge-left {
+  left: 0;
+  transform: translateY(-50%) rotate(-90deg);
+  transform-origin: 0 50%;
+  padding-left: 16px;
+}
+
+.badge-right {
+  right: 0;
+  transform: translateY(-50%) rotate(90deg);
+  transform-origin: 100% 50%;
+  padding-right: 16px;
+}
+
+/* ─── GLASS PANELS (brutalist: zero radius) ─── */
+.panel {
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-.glass-panel-interactive {
-  background: rgba(8, 8, 10, 0.45);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.03);
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+.panel-hover {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.glass-panel-interactive:hover {
-  background: rgba(14, 14, 18, 0.75);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.95), 
-              0 0 35px -5px rgba(124, 58, 237, 0.035);
+.panel-hover:hover {
+  background: rgba(255, 91, 0, 0.04);
+  border-color: rgba(255, 91, 0, 0.2);
 }
 
-/* Custom Scrollbar design to match our dark futuristic grid */
+/* ─── INPUT ─── */
+input, select, textarea {
+  font-family: var(--font-body);
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--brand-accent);
+}
+
+::placeholder {
+  color: rgba(255, 255, 255, 0.2);
+  font-family: var(--font-body);
+}
+
+/* ─── CUSTOM SCROLLBAR ─── */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(3, 3, 3, 0.4);
-  border-radius: 999px;
+  background: transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(124, 58, 237, 0.25);
-  border: 1px solid rgba(124, 58, 237, 0.1);
-  border-radius: 999px;
+  background: rgba(255, 91, 0, 0.3);
+  border: none;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--brand-accent);
 }
 
-/* Spring-assisted shake animation for validation failures */
+/* ─── KEYFRAMES ─── */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-6px); }
@@ -96,7 +183,6 @@ body::before {
   animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
 }
 
-/* Fade In animations for popup transitions */
 @keyframes fadeIn {
   from { opacity: 0; transform: scale(0.97); }
   to { opacity: 1; transform: scale(1); }
@@ -106,7 +192,7 @@ body::before {
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Apply global variable color changes dynamically to brand items */
+/* ─── BRAND ACCENT UTILITIES ─── */
 .text-brand-accent {
   color: var(--brand-accent) !important;
 }
@@ -127,6 +213,25 @@ body::before {
   --tw-shadow-color: var(--brand-accent) !important;
 }
 
+/* ─── BUTTON BASE ─── */
+.btn-cyber {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* ─── LABEL META ─── */
+.label-meta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.25);
+}
+
 /* ============================================================
    LIGHT THEME OVERRIDES
    ============================================================ */
@@ -144,58 +249,44 @@ body::before {
   --color-zinc-950: #fafafa;
   --color-white: #09090b;
   --color-black: #ffffff;
+  --grid-color: rgba(0, 0, 0, 0.04);
+  --scanline-color: rgba(255, 91, 0, 0.04);
 }
 
 [data-theme="light"] body {
-  background-color: #f8f8fa;
-  background-image: radial-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px);
-  background-size: 24px 24px;
+  background-color: #ffffff;
   color: #18181b;
 }
 
-[data-theme="light"] body::before {
-  background: radial-gradient(circle, rgba(124, 58, 237, 0.04) 0%, rgba(124, 58, 237, 0) 70%);
+[data-theme="light"] .watermark {
+  color: rgba(0, 0, 0, 0.02);
 }
 
-[data-theme="light"] .glass-panel {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+[data-theme="light"] .badge-vertical {
+  color: rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .panel {
+  background: rgba(0, 0, 0, 0.02);
   border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-[data-theme="light"] .glass-panel-interactive {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+[data-theme="light"] .panel-hover {
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-[data-theme="light"] .glass-panel-interactive:hover {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.1), 0 0 35px -5px rgba(124, 58, 237, 0.06);
+[data-theme="light"] .panel-hover:hover {
+  background: rgba(255, 91, 0, 0.04);
+  border-color: rgba(255, 91, 0, 0.2);
 }
 
-[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(248, 248, 250, 0.4);
+[data-theme="light"] ::placeholder {
+  color: rgba(0, 0, 0, 0.2);
 }
 
-[data-theme="light"] .glass-panel,
-[data-theme="light"] .glass-panel-interactive {
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.08);
-}
-
-[data-theme="light"] input::placeholder {
-  color: #a1a1aa;
-}
-
-[data-theme="light"] .disabled\:bg-zinc-950:disabled {
-  background-color: #e4e4e7;
-}
-
-[data-theme="light"] .disabled\:text-zinc-650:disabled {
-  color: #a1a1aa;
+[data-theme="light"] .label-meta {
+  color: rgba(0, 0, 0, 0.25);
 }
 
 [data-theme="light"] .bg-red-950\/10 {
@@ -204,8 +295,4 @@ body::before {
 
 [data-theme="light"] .border-red-900\/35 {
   border-color: rgba(239, 68, 68, 0.15);
-}
-
-[data-theme="light"] .bg-brand-accent\/10 {
-  background-color: color-mix(in srgb, var(--brand-accent) 8%, transparent);
 }

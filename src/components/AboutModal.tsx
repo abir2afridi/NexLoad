@@ -5,7 +5,7 @@
 
 import React, { useState } from "react";
 import { useAppStore } from "../stores/useAppStore";
-import { X, Info, HelpCircle, ShieldAlert, Terminal, MessageSquare, Flame } from "lucide-react";
+import { X, Info, ShieldAlert, Terminal, Flame } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 
 export const AboutModal: React.FC = () => {
@@ -40,97 +40,102 @@ export const AboutModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/85 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-fade-in"
       id="about-modal-backdrop"
+      onClick={() => setAboutOpen(false)}
     >
-      <div 
-        className="w-full max-w-2xl glass-panel rounded-3xl overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] flex flex-col max-h-[90vh]"
+      <div
+        className="w-full max-w-2xl bg-black border border-white/10 flex flex-col max-h-[90vh]"
         id="about-modal-container"
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
-        <div className="flex justify-between items-center px-6 py-4.5 border-b border-zinc-900 bg-zinc-950/20">
-          <div className="flex items-center gap-2.5">
-            <BrandLogo size={24} />
-            <h3 className="text-base font-extrabold text-white tracking-tight">About NexLoad</h3>
+        {/* Header */}
+        <div className="flex justify-between items-center px-6 py-4 border-b border-white/5">
+          <div className="flex items-center gap-3">
+            <BrandLogo size={22} />
+            <h3 className="text-sm font-display font-bold tracking-[0.15em] text-white uppercase">
+              About NexLoad
+            </h3>
           </div>
           <button
             onClick={() => setAboutOpen(false)}
-            className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl transition-colors focus:outline-none cursor-pointer"
+            className="p-1.5 text-white/30 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Tab navigation bar */}
-        <div className="flex border-b border-zinc-900 px-6 gap-6 text-[10px] font-mono font-bold tracking-widest text-zinc-500 uppercase py-2.5 bg-zinc-950/10">
-          <button
-            onClick={() => setActiveSubTab("about")}
-            className={`py-2 transition-colors cursor-pointer relative ${activeSubTab === "about" ? "text-brand-accent font-extrabold" : "hover:text-zinc-300"}`}
-          >
-            Mission & Architecture
-            {activeSubTab === "about" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-accent rounded-full" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveSubTab("api")}
-            className={`py-2 transition-colors cursor-pointer relative ${activeSubTab === "api" ? "text-brand-accent font-extrabold" : "hover:text-zinc-300"}`}
-          >
-            API Docs
-            {activeSubTab === "api" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-accent rounded-full" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveSubTab("faq")}
-            className={`py-2 transition-colors cursor-pointer relative ${activeSubTab === "faq" ? "text-brand-accent font-extrabold" : "hover:text-zinc-300"}`}
-          >
-            Interactive FAQ
-            {activeSubTab === "faq" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-accent rounded-full" />
-            )}
-          </button>
+        {/* Tabs */}
+        <div className="flex border-b border-white/5 px-6 gap-6 text-[9px] font-display tracking-[0.25em] text-white/30 uppercase py-2.5">
+          {(["about", "api", "faq"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveSubTab(tab)}
+              className={`py-2 transition-colors cursor-pointer relative ${
+                activeSubTab === tab
+                  ? "text-[#ff5b00]"
+                  : "hover:text-white/60"
+              }`}
+            >
+              {tab === "about"
+                ? "Mission & Architecture"
+                : tab === "api"
+                  ? "API Docs"
+                  : "Interactive FAQ"}
+              {activeSubTab === tab && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff5b00]" />
+              )}
+            </button>
+          ))}
         </div>
 
-        {/* Scrollable Contents */}
-        <div className="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 text-zinc-300 text-sm">
-          
+        {/* Content */}
+        <div className="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 text-sm">
           {activeSubTab === "about" && (
             <div className="flex flex-col gap-5">
               <div className="text-center py-4">
                 <BrandLogo size={48} className="mx-auto mb-3" />
-                <h4 className="text-lg font-black text-white">NexLoad Media Engine</h4>
-                <p className="text-zinc-500 font-mono text-[10.5px] mt-1">Version 1.2.0 • MIT Open Source licensed</p>
+                <h4 className="text-base font-display font-bold tracking-[0.1em] text-white uppercase">
+                  NexLoad Media Engine
+                </h4>
+                <p className="text-[10px] font-mono text-white/30 mt-1">
+                  Version 1.2.0 &bull; MIT Open Source
+                </p>
               </div>
 
-              <div className="p-5 bg-zinc-950/40 border border-zinc-900/60 rounded-2xl shadow-inner relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-brand-accent/5 rounded-full blur-2xl pointer-events-none" />
-                <h5 className="font-extrabold text-white mb-2 flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-brand-accent animate-pulse">
-                  <Flame className="w-4 h-4 text-brand-accent" /> The Cobalt UX Philosophy
+              <div className="border border-white/5 p-5 relative">
+                <h5 className="text-[10px] font-display tracking-[0.25em] text-[#ff5b00] uppercase mb-2 flex items-center gap-2">
+                  <Flame className="w-3.5 h-3.5" />
+                  The Cobalt UX Philosophy
                 </h5>
-                <p className="text-[12.5px] text-zinc-400 leading-relaxed font-sans mt-1">
-                  NexLoad is built entirely from scratch with zero-friction architecture. There are no tracking scripts, cookie compliance pop-ups, telemetry logs, or intrusive advertisements. You paste a resource URL, select your quality, and immediate extraction triggers. Full stop.
+                <p className="text-xs text-white/50 font-body leading-relaxed">
+                  NexLoad is built entirely from scratch with zero-friction
+                  architecture. There are no tracking scripts, cookie compliance
+                  pop-ups, telemetry logs, or intrusive advertisements. You
+                  paste a resource URL, select your quality, and immediate
+                  extraction triggers. Full stop.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-4.5 bg-zinc-950/40 border border-zinc-900/60 rounded-2xl relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
-                  <h5 className="font-bold text-zinc-200 mb-1 flex items-center gap-1.5 text-xs">
-                    <ShieldAlert className="w-4 h-4 text-emerald-400" /> Decentralized Privacy
+                <div className="border border-white/5 p-4">
+                  <h5 className="text-[10px] font-display tracking-wider text-white/60 uppercase mb-1 flex items-center gap-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-[#ff5b00]" />
+                    Decentralized Privacy
                   </h5>
-                  <p className="text-xs text-zinc-400 leading-relaxed font-sans">
-                    All downloaded index tokens and user history items are held solely within IndexedDB inside your browser shell.
+                  <p className="text-[11px] text-white/40 font-body leading-relaxed">
+                    All downloaded index tokens and user history items are held
+                    solely within IndexedDB inside your browser shell.
                   </p>
                 </div>
-
-                <div className="p-4.5 bg-zinc-950/40 border border-zinc-900/60 rounded-2xl relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-brand-accent/5 rounded-full blur-xl pointer-events-none" />
-                  <h5 className="font-bold text-zinc-200 mb-1 flex items-center gap-1.5 text-xs">
-                    <Info className="w-4 h-4 text-brand-accent" /> Intelligence recommendation
+                <div className="border border-white/5 p-4">
+                  <h5 className="text-[10px] font-display tracking-wider text-white/60 uppercase mb-1 flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-[#ff5b00]" />
+                    Intelligence Recommendation
                   </h5>
-                  <p className="text-xs text-zinc-400 leading-relaxed font-sans">
-                    Utilizes deep LLM parsing rules to analyze platform links, extracting beautiful metadata details with high fidelity.
+                  <p className="text-[11px] text-white/40 font-body leading-relaxed">
+                    Utilizes deep LLM parsing rules to analyze platform links,
+                    extracting beautiful metadata details with high fidelity.
                   </p>
                 </div>
               </div>
@@ -138,35 +143,39 @@ export const AboutModal: React.FC = () => {
           )}
 
           {activeSubTab === "api" && (
-            <div className="flex flex-col gap-4 animate-fade-in">
-              <h4 className="font-extrabold text-zinc-100 flex items-center gap-1.5 font-mono uppercase text-[11px] tracking-wider text-brand-accent">
-                <Terminal className="w-4 h-4 text-brand-accent" /> Self-Hosted REST endpoints
+            <div className="flex flex-col gap-4">
+              <h4 className="text-[10px] font-display tracking-[0.25em] text-[#ff5b00] uppercase flex items-center gap-2">
+                <Terminal className="w-3.5 h-3.5" />
+                Self-Hosted REST Endpoints
               </h4>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Developers can dispatch automated extraction scripts directly from external shells using our unified API routes:
+              <p className="text-xs text-white/50 font-body leading-relaxed">
+                Developers can dispatch automated extraction scripts directly
+                from external shells using our unified API routes:
               </p>
 
-              <div className="flex flex-col gap-3.5">
-                {/* Endpoint 1 */}
-                <div className="bg-zinc-950/80 p-4.5 border border-zinc-900/80 rounded-2xl font-mono text-xs shadow-lg">
-                  <div className="flex items-center gap-2 mb-2 text-emerald-400 font-bold">
-                    <span className="bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase">POST</span>
-                    <span>/api/analyze-url</span>
+              <div className="flex flex-col gap-3">
+                <div className="border border-white/10 p-4 font-mono text-xs">
+                  <div className="flex items-center gap-2 mb-2 text-emerald-400 text-[10px] uppercase tracking-wider font-display">
+                    <span className="bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5">
+                      POST
+                    </span>
+                    <span className="text-white/60">/api/analyze-url</span>
                   </div>
-                  <pre className="text-zinc-400 text-[10px] bg-zinc-950 p-3 rounded-xl border border-zinc-900/80 mt-2.5 overflow-x-auto custom-scrollbar leading-relaxed">
+                  <pre className="text-white/30 text-[9px] bg-white/[0.02] border border-white/5 p-3 mt-2 overflow-x-auto custom-scrollbar leading-relaxed">
 {`curl -X POST http://localhost:3000/api/analyze-url \\
   -H "Content-Type: application/json" \\
   -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'`}
                   </pre>
                 </div>
 
-                {/* Endpoint 2 */}
-                <div className="bg-zinc-950/80 p-4.5 border border-zinc-900/80 rounded-2xl font-mono text-xs shadow-lg">
-                  <div className="flex items-center gap-2 mb-2 text-brand-accent font-bold">
-                    <span className="bg-brand-accent/10 border border-brand-accent/25 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase">POST</span>
-                    <span>/api/jobs/create</span>
+                <div className="border border-white/10 p-4 font-mono text-xs">
+                  <div className="flex items-center gap-2 mb-2 text-[#ff5b00] text-[10px] uppercase tracking-wider font-display">
+                    <span className="bg-[#ff5b00]/10 border border-[#ff5b00]/25 px-2 py-0.5">
+                      POST
+                    </span>
+                    <span className="text-white/60">/api/jobs/create</span>
                   </div>
-                  <pre className="text-zinc-400 text-[10px] bg-zinc-950 p-3 rounded-xl border border-zinc-900/80 mt-2.5 overflow-x-auto custom-scrollbar leading-relaxed">
+                  <pre className="text-white/30 text-[9px] bg-white/[0.02] border border-white/5 p-3 mt-2 overflow-x-auto custom-scrollbar leading-relaxed">
 {`curl -X POST http://localhost:3000/api/jobs/create \\
   -H "Content-Type: application/json" \\
   -d '{"url":"https://...","title":"Rickroll","formatId":"best_mp4"}'`}
@@ -177,23 +186,41 @@ export const AboutModal: React.FC = () => {
           )}
 
           {activeSubTab === "faq" && (
-            <div className="flex flex-col gap-3 ml-0.5 animate-fade-in" id="faq-accordions">
+            <div className="flex flex-col gap-2">
               {faqs.map((f, idx) => {
                 const isExpanded = expandedFaqIndex === idx;
                 return (
                   <div
                     key={idx}
-                    className="border border-zinc-900/60 rounded-2xl overflow-hidden bg-zinc-950/35 hover:bg-zinc-950/55 transition-all duration-300"
+                    className="border border-white/5 bg-white/[0.01]"
                   >
                     <button
-                      onClick={() => setExpandedFaqIndex(isExpanded ? null : idx)}
-                      className="w-full text-left px-5 py-4 flex items-center justify-between font-bold text-[11px] font-mono uppercase tracking-wider text-zinc-100 hover:text-brand-accent transition-colors duration-250 focus:outline-none cursor-pointer"
+                      onClick={() =>
+                        setExpandedFaqIndex(isExpanded ? null : idx)
+                      }
+                      className={`w-full text-left px-5 py-3.5 flex items-center justify-between text-[10px] font-display tracking-wider uppercase text-white/60 hover:text-white transition-colors cursor-pointer ${
+                        isExpanded ? "border-b border-white/5" : ""
+                      }`}
                     >
                       <span className="max-w-[85%]">{f.q}</span>
-                      <ChevronRightArrow rotating={isExpanded} />
+                      <svg
+                        className={`w-3.5 h-3.5 text-white/30 transition-transform duration-300 ${
+                          isExpanded ? "rotate-90" : ""
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2.5"
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
                     </button>
                     {isExpanded && (
-                      <div className="px-5 pb-5 pt-1.5 text-zinc-400 text-xs leading-relaxed border-t border-zinc-900/30 animate-slide-down font-sans">
+                      <div className="px-5 pb-4 pt-2 text-xs text-white/40 font-body leading-relaxed">
                         {f.a}
                       </div>
                     )}
@@ -202,34 +229,18 @@ export const AboutModal: React.FC = () => {
               })}
             </div>
           )}
-
         </div>
 
-        {/* Modal Footer */}
-        <div className="flex justify-end px-6 py-4 border-t border-zinc-900 bg-zinc-950/20">
+        {/* Footer */}
+        <div className="flex justify-end px-6 py-4 border-t border-white/5">
           <button
             onClick={() => setAboutOpen(false)}
-            className="bg-brand-accent text-white hover:bg-opacity-95 text-xs px-6 py-2.5 rounded-xl font-bold font-mono uppercase tracking-wider cursor-pointer shadow-[0_4px_15px_rgba(124,58,237,0.15)] transition-all"
+            className="px-5 py-2 bg-[#ff5b00] hover:bg-[#e65200] text-white text-xs font-display tracking-[0.15em] uppercase transition-all cursor-pointer"
           >
             Acknowledge
           </button>
         </div>
-
       </div>
     </div>
-  );
-};
-
-// Subtle icon chevron rotating component helper to avoid inline classes
-const ChevronRightArrow: React.FC<{ rotating: boolean }> = ({ rotating }) => {
-  return (
-    <svg
-      className={`w-4 h-4 text-zinc-500 transition-transform duration-300 ${rotating ? "rotate-90 text-brand-accent" : ""}`}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
-    </svg>
   );
 };
