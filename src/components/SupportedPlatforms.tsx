@@ -18,15 +18,15 @@ interface PlatformConfig {
 }
 
 const PLATFORMS: PlatformConfig[] = [
-  { name: "YouTube", icon: Youtube, color: "text-red-400 border-red-500/30", pattern: /(youtube\.com|youtu\.be)/i },
-  { name: "TikTok", icon: Video, color: "text-white border-white/20", pattern: /tiktok\.com/i },
-  { name: "Instagram", icon: Instagram, color: "text-pink-400 border-pink-500/30", pattern: /instagram\.com/i },
-  { name: "SoundCloud", icon: Music, color: "text-orange-400 border-orange-500/30", pattern: /soundcloud\.com/i },
-  { name: "Twitch", icon: Tv, color: "text-purple-400 border-purple-500/30", pattern: /twitch\.tv/i },
-  { name: "Twitter/X", icon: Twitter, color: "text-sky-400 border-sky-500/30", pattern: /(twitter\.com|x\.com)/i },
-  { name: "Reddit", icon: MessageSquare, color: "text-orange-500 border-orange-600/30", pattern: /reddit\.com/i },
-  { name: "Pinterest", icon: Image, color: "text-rose-500 border-rose-600/30", pattern: /pinterest\.com/i },
-  { name: "Vimeo", icon: Globe, color: "text-blue-400 border-blue-400/30", pattern: /vimeo\.com/i },
+  { name: "YouTube", icon: Youtube, color: "text-red-500 border-red-500/40", pattern: /(youtube\.com|youtu\.be)/i },
+  { name: "TikTok", icon: Video, color: "text-ink border-ink/30", pattern: /tiktok\.com/i },
+  { name: "Instagram", icon: Instagram, color: "text-pink-500 border-pink-500/40", pattern: /instagram\.com/i },
+  { name: "SoundCloud", icon: Music, color: "text-orange-500 border-orange-500/40", pattern: /soundcloud\.com/i },
+  { name: "Twitch", icon: Tv, color: "text-purple-500 border-purple-500/40", pattern: /twitch\.tv/i },
+  { name: "Twitter/X", icon: Twitter, color: "text-sky-500 border-sky-500/40", pattern: /(twitter\.com|x\.com)/i },
+  { name: "Reddit", icon: MessageSquare, color: "text-orange-600 border-orange-600/40", pattern: /reddit\.com/i },
+  { name: "Pinterest", icon: Image, color: "text-rose-500 border-rose-500/40", pattern: /pinterest\.com/i },
+  { name: "Vimeo", icon: Globe, color: "text-blue-400 border-blue-400/40", pattern: /vimeo\.com/i },
 ];
 
 export const SupportedPlatforms: React.FC<SupportedPlatformsProps> = ({ currentUrl }) => {
@@ -45,13 +45,13 @@ export const SupportedPlatforms: React.FC<SupportedPlatformsProps> = ({ currentU
           return (
             <div
               key={plat.name}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-display tracking-wider uppercase border transition-all cursor-default ${
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-mono tracking-wider uppercase border transition-all cursor-default ${
                 isActive
-                  ? `${plat.color} bg-white/[0.03] border-current scale-105`
-                  : "text-white/20 border-white/5 hover:text-white/40 hover:border-white/10"
+                  ? `${plat.color} bg-ink/5`
+                  : "text-ink-muted border-ink/5 hover:text-ink-light hover:border-ink/10"
               }`}
             >
-              <Icon className="w-3 h-3" />
+              <Icon className="w-4 h-4" />
               <span>{plat.name}</span>
             </div>
           );

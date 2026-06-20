@@ -38,9 +38,9 @@ interface AppState {
   analysisError: string | null;
   setAnalysisError: (error: string | null) => void;
 
-  // Active Browsing Theme Mode ('dark' | 'light' | 'system')
-  themeMode: "dark" | "light" | "system";
-  setThemeMode: (mode: "dark" | "light" | "system") => void;
+  // Active Browsing Theme Mode
+  themeMode: "dark" | "dark2" | "light" | "system";
+  setThemeMode: (mode: "dark" | "dark2" | "light" | "system") => void;
 }
 
 const defaultSettings: UserSettings = {

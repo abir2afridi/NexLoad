@@ -23,26 +23,23 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({ className = "", size = 32 
     >
       <defs>
         <linearGradient id="n-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="var(--font-brand-accent, #ff5b00)" />
-          <stop offset="100%" stopColor="#ff8c00" />
+          <stop offset="0%" stopColor="var(--font-brand-accent, #2563EB)" />
+          <stop offset="100%" stopColor="#60A5FA" />
         </linearGradient>
-        <filter id="glow-effect" x="-10%" y="-10%" width="120%" height="120%">
-          <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="var(--font-brand-accent, #ff5b00)" floodOpacity="0.4" />
-        </filter>
       </defs>
 
       <circle
         cx="50"
         cy="50"
         r="44"
-        stroke="currentColor"
+        stroke="var(--font-brand-accent, #2563EB)"
         strokeWidth="3"
-        strokeOpacity="0.12"
+        strokeOpacity="0.15"
       />
 
-      <g filter="url(#glow-effect)">
-        <rect x="26" y="25" width="11" height="50" rx="5.5" fill="url(#n-gradient)" />
-        <rect x="63" y="25" width="11" height="50" rx="5.5" fill="url(#n-gradient)" />
+      <g>
+        <rect x="26" y="25" width="11" height="50" fill="url(#n-gradient)" />
+        <rect x="63" y="25" width="11" height="50" fill="url(#n-gradient)" />
         <path
           d="M32 28 L68 62 M68 50 L68 65 L53 65"
           stroke="url(#n-gradient)"

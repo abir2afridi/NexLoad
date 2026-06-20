@@ -7,6 +7,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAppStore } from "./stores/useAppStore";
 import { BrandLogo } from "./components/BrandLogo";
+import GhostLoader from "./components/GhostLoader";
 import { SupportedPlatforms } from "./components/SupportedPlatforms";
 import { MetadataPreview } from "./components/MetadataPreview";
 import { SearchAndBrowse } from "./components/SearchAndBrowse";
@@ -21,7 +22,66 @@ import {
   Globe,
   Clipboard,
   X,
+  Heart,
 } from "lucide-react";
+
+const HeroSunSVG = () => (
+  <svg className="absolute -top-20 -right-20 w-72 h-72 opacity-15 pointer-events-none text-amber" viewBox="0 0 200 200" fill="none">
+    <circle cx="100" cy="100" r="60" stroke="currentColor" strokeWidth="2" />
+    <circle cx="100" cy="100" r="85" stroke="currentColor" strokeWidth="1" strokeDasharray="4 4" />
+    <circle cx="100" cy="100" r="45" stroke="currentColor" strokeWidth="1" />
+    <line x1="100" y1="5" x2="100" y2="25" stroke="currentColor" strokeWidth="2" />
+    <line x1="100" y1="175" x2="100" y2="195" stroke="currentColor" strokeWidth="2" />
+    <line x1="5" y1="100" x2="25" y2="100" stroke="currentColor" strokeWidth="2" />
+    <line x1="175" y1="100" x2="195" y2="100" stroke="currentColor" strokeWidth="2" />
+    <line x1="32" y1="32" x2="46" y2="46" stroke="currentColor" strokeWidth="1.5" />
+    <line x1="154" y1="154" x2="168" y2="168" stroke="currentColor" strokeWidth="1.5" />
+    <line x1="32" y1="168" x2="46" y2="154" stroke="currentColor" strokeWidth="1.5" />
+    <line x1="154" y1="46" x2="168" y2="32" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
+const Star4 = ({ x, y, size = 6 }: { x: number; y: number; size?: number }) => (
+  <path
+    d={`M${x} ${y - size} L${x + size * 0.3} ${y - size * 0.3} L${x + size} ${y} L${x + size * 0.3} ${y + size * 0.3} L${x} ${y + size} L${x - size * 0.3} ${y + size * 0.3} L${x - size} ${y} L${x - size * 0.3} ${y - size * 0.3} Z`}
+    stroke="currentColor" strokeWidth="0.8" fill="currentColor" fillOpacity="0.3"
+  />
+);
+
+const HeroMoonSVG = () => (
+  <svg className="absolute -top-16 -right-16 w-72 h-72 opacity-20 pointer-events-none text-amber" viewBox="-30 -30 260 260" fill="none">
+    <circle cx="100" cy="80" r="55" stroke="currentColor" strokeWidth="2" />
+    <circle cx="72" cy="65" r="40" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.06" />
+    <circle cx="108" cy="108" r="7" stroke="currentColor" strokeWidth="0.8" />
+    <circle cx="85" cy="118" r="4" stroke="currentColor" strokeWidth="0.8" />
+    <circle cx="122" cy="68" r="3" stroke="currentColor" strokeWidth="0.8" />
+    <circle cx="78" cy="88" r="5" stroke="currentColor" strokeWidth="0.8" />
+    <circle cx="118" cy="90" r="2.5" stroke="currentColor" strokeWidth="0.8" />
+    <Star4 x={20} y={30} size={5} />
+    <Star4 x={180} y={20} size={7} />
+    <Star4 x={40} y={160} size={4} />
+    <Star4 x={160} y={140} size={6} />
+    <Star4 x={60} y={10} size={3} />
+    <Star4 x={140} y={180} size={5} />
+    <Star4 x={10} y={100} size={4} />
+    <Star4 x={190} y={80} size={3} />
+    <line x1="100" y1="10" x2="100" y2="20" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 2" opacity="0.4" />
+    <line x1="100" y1="175" x2="100" y2="185" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 2" opacity="0.3" />
+  </svg>
+);
+
+const TowerSVG = () => (
+  <svg className="absolute -bottom-8 -left-8 w-56 h-56 opacity-15 pointer-events-none text-amber" viewBox="0 0 200 200" fill="none">
+    <rect x="85" y="40" width="30" height="120" stroke="currentColor" strokeWidth="2" />
+    <rect x="70" y="70" width="60" height="8" stroke="currentColor" strokeWidth="1.5" />
+    <rect x="75" y="95" width="50" height="6" stroke="currentColor" strokeWidth="1" />
+    <rect x="80" y="115" width="40" height="5" stroke="currentColor" strokeWidth="1" />
+    <polygon points="85,40 100,15 115,40" stroke="currentColor" strokeWidth="2" fill="none" />
+    <line x1="100" y1="15" x2="100" y2="5" stroke="currentColor" strokeWidth="1.5" />
+    <rect x="90" y="140" width="20" height="20" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
+    <circle cx="100" cy="150" r="3" stroke="currentColor" strokeWidth="1" />
+  </svg>
+);
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false } },
@@ -43,24 +103,20 @@ function DownloaderDashboard() {
   } = useAppStore();
 
   const [hasAnimationShake, setHasAnimationShake] = useState(false);
-  const [scrollY, setScrollY] = useState(0);
 
+  // ─── Theme: toggle .dark / .dark-2 class on <html> ───
   useEffect(() => {
-    const onScroll = () => setScrollY(window.scrollY);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
-      const effective =
-        themeMode === "system"
-          ? mq.matches
-            ? "light"
-            : "dark"
-          : themeMode;
-      document.documentElement.setAttribute("data-theme", effective);
+      const html = document.documentElement;
+      html.classList.remove("dark", "dark-2");
+      if (themeMode === "dark2") {
+        html.classList.add("dark-2");
+      } else if (themeMode === "dark") {
+        html.classList.add("dark");
+      } else if (themeMode === "system" && mq.matches) {
+        html.classList.add("dark");
+      }
     };
     apply();
     mq.addEventListener("change", apply);
@@ -125,49 +181,19 @@ function DownloaderDashboard() {
   };
 
   return (
-    <div
-      className="min-h-screen relative overflow-hidden pb-32"
-      id="nexload-app-root"
-    >
-      {/* ─── SCANLINE OVERLAY ─── */}
-      <div className="scanline-overlay" />
-
-      {/* ─── FLOATING WATERMARK ─── */}
-      <div
-        className="watermark"
-        style={{ top: "5%", left: "-4%", transform: `translateY(${scrollY * 0.06}px)` }}
-      >
-        NEXLOAD
-      </div>
-      <div
-        className="watermark"
-        style={{ bottom: "5%", right: "-4%", transform: `translateY(${-scrollY * 0.04}px)` }}
-      >
-        STREAM
-      </div>
-
-      {/* ─── FLOATING VERTICAL BADGES ─── */}
-      <div className="badge-vertical badge-left">
-        <span className="badge-line" />
-        <span>CYBERPUNK</span>
-      </div>
-      <div className="badge-vertical badge-right">
-        <span>FUTURISTIC</span>
-        <span className="badge-line" />
-      </div>
-
+    <div className="min-h-screen flex flex-col" id="nexload-app-root">
       {/* ─── HEADER ─── */}
-      <header className="border-b border-white/5 bg-black/40 backdrop-blur-md sticky top-0 z-40 transition-colors duration-500">
+      <header className="border-b border-sand bg-cream sticky top-0 z-40 transition-colors duration-500">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <div
             className="flex items-center gap-3 cursor-pointer select-none"
             onClick={() => setAnalyzedMetadata(null)}
           >
             <BrandLogo size={28} />
-            <span className="font-display font-bold tracking-[0.15em] text-white text-base uppercase">
+            <span className="font-bold tracking-wide text-ink text-lg">
               NexLoad
             </span>
-            <span className="hidden sm:inline-block px-2 py-0.5 bg-white/5 border border-white/10 text-[9px] font-mono text-white/30 tracking-wider uppercase">
+            <span className="hidden sm:inline-block px-2 py-0.5 bg-ink/5 border border-sand text-[10px] text-ink-light uppercase tracking-widest">
               v1.2.0
             </span>
           </div>
@@ -178,20 +204,20 @@ function DownloaderDashboard() {
                 const el = document.getElementById("browser-panel-root");
                 if (el) el.scrollIntoView({ behavior: "smooth" });
               }}
-              className="px-3 py-2 text-white/40 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all font-display text-xs tracking-widest uppercase flex items-center gap-2 cursor-pointer"
+              className="px-3 py-2 text-ink-muted hover:text-ink hover:bg-ink/5 border border-transparent hover:border-sand transition-all text-[10px] uppercase tracking-widest flex items-center gap-2 cursor-pointer"
             >
               <Search className="w-3.5 h-3.5" />
               <span className="hidden md:inline">Search</span>
             </button>
             <button
               onClick={() => setSettingsOpen(true)}
-              className="px-3 py-2 text-white/40 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all cursor-pointer"
+              className="px-3 py-2 text-ink-muted hover:text-ink hover:bg-ink/5 border border-transparent hover:border-sand transition-all cursor-pointer"
             >
               <Settings className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setAboutOpen(true)}
-              className="px-3 py-2 text-white/40 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all cursor-pointer"
+              className="px-3 py-2 text-ink-muted hover:text-ink hover:bg-ink/5 border border-transparent hover:border-sand transition-all cursor-pointer"
             >
               <HelpCircle className="w-3.5 h-3.5" />
             </button>
@@ -199,7 +225,7 @@ function DownloaderDashboard() {
               href="https://github.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-2 text-white/40 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all"
+              className="px-3 py-2 text-ink-muted hover:text-ink hover:bg-ink/5 border border-transparent hover:border-sand transition-all"
             >
               <Github className="w-3.5 h-3.5" />
             </a>
@@ -207,40 +233,40 @@ function DownloaderDashboard() {
         </div>
       </header>
 
-      {/* ─── MAIN ─── */}
-      <main className="max-w-5xl mx-auto px-4 md:px-6 pt-16 md:pt-24 flex flex-col gap-16 relative z-10">
-        {/* ─── HERO ─── */}
+      {/* ─── MAIN CONTENT ─── */}
+      <div className="flex-1">
+      <main className="max-w-5xl mx-auto px-4 md:px-6 pt-4 md:pt-8 flex flex-col gap-0 relative z-10">
+        {/* ─── HERO ─── (cream section) */}
         <section
-          className="text-center flex flex-col items-center gap-4 max-w-2xl mx-auto"
+          className="text-center flex flex-col items-center gap-3 max-w-2xl mx-auto relative py-6 md:py-10"
           id="brand-hero-section"
         >
-          <div className="inline-flex items-center gap-3 px-4 py-1.5 bg-[#ff5b00]/10 border border-[#ff5b00]/25 text-[10px] font-mono tracking-[0.25em] text-[#ff5b00] uppercase">
-            <span className="w-1.5 h-1.5 bg-[#ff5b00] animate-pulse" />
-            V1.2.0 Next-Gen Stream Core
-          </div>
-          <BrandLogo size={52} className="mb-1" />
-          <h1 className="text-4xl md:text-6xl font-display font-bold tracking-tight text-white leading-[1.05] uppercase">
+          <div className="hero-sun"><HeroSunSVG /></div>
+          <div className="hero-moon"><HeroMoonSVG /></div>
+          <GhostLoader />
+          <BrandLogo size={48} />
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-ink leading-[1.05]">
             Stream Extraction.
             <br />
-            <span className="text-[#ff5b00]">Simplified.</span>
+            <span className="text-amber">Simplified.</span>
           </h1>
-          <p className="text-sm text-white/40 font-body tracking-wide mt-1">
+          <p className="text-sm text-ink-light tracking-wide mt-1">
             "Download anything. Instantly." &mdash; No Tracking &bull; No Ads.
           </p>
         </section>
 
-        {/* ─── URL INPUT ─── */}
-        <section className="w-full max-w-3xl mx-auto" id="input-control-section">
+        {/* ─── URL INPUT ─── (cream section) */}
+        <section className="w-full max-w-3xl mx-auto pb-20" id="input-control-section">
           <form
             onSubmit={triggerUrlValidation}
-            className={`flex flex-col md:flex-row gap-0 border transition-all duration-300 relative ${
+            className={`card-brutalist flex flex-col md:flex-row gap-0 transition-all duration-300 ${
               hasAnimationShake
-                ? "animate-shake border-red-500/70 bg-red-500/5"
-                : "border-white/10 bg-white/[0.015] hover:border-white/20 focus-within:border-[#ff5b00] focus-within:bg-[#ff5b00]/[0.02]"
+                ? "animate-shake border-red"
+                : "focus-within:border-amber"
             }`}
           >
-            <div className="flex-1 flex items-center gap-3 px-4 py-3 border-b md:border-b-0 md:border-r border-white/5">
-              <Globe className="w-4 h-4 text-[#ff5b00] shrink-0" />
+            <div className="flex-1 flex items-center gap-3 px-5 py-3.5 border-b md:border-b-0 md:border-r border-sand">
+              <Globe className="w-4 h-4 text-amber shrink-0" />
               <input
                 type="text"
                 placeholder="Paste any YouTube, TikTok, Instagram, Reddit, SoundCloud link..."
@@ -249,14 +275,14 @@ function DownloaderDashboard() {
                   setUrlInput(e.target.value);
                   setAnalysisError(null);
                 }}
-                className="w-full bg-transparent border-none text-sm text-white/80 placeholder-white/20 focus:outline-none focus:ring-0 leading-normal font-body"
+                className="w-full bg-transparent border-none text-sm text-ink/80 placeholder-ink-subtle/60 focus:outline-none focus:ring-0 leading-normal"
                 id="url-paste-input"
               />
               {urlInput && (
                 <button
                   type="button"
                   onClick={handleClearUrl}
-                  className="p-1 text-white/30 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                  className="p-1 text-ink-muted hover:text-ink hover:bg-ink/5 transition-colors cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -267,7 +293,7 @@ function DownloaderDashboard() {
               <button
                 type="button"
                 onClick={handlePasteClipboard}
-                className="px-4 py-3 bg-white/5 border-r border-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all cursor-pointer flex items-center justify-center"
+                className="px-4 py-3.5 bg-ink/5 border-r border-sand hover:bg-ink/10 text-ink-light hover:text-ink transition-all cursor-pointer flex items-center justify-center"
                 title="Paste from clipboard"
               >
                 <Clipboard className="w-3.5 h-3.5" />
@@ -275,11 +301,11 @@ function DownloaderDashboard() {
               <button
                 type="submit"
                 disabled={isAnalyzing || !urlInput.trim()}
-                className="px-8 py-3 bg-[#ff5b00] hover:bg-[#e65200] text-white font-display text-xs tracking-[0.15em] uppercase transition-all cursor-pointer disabled:bg-white/5 disabled:text-white/20 disabled:cursor-not-allowed"
+                className="px-8 py-3.5 bg-amber hover:bg-ink text-white text-xs tracking-[0.15em] uppercase transition-all cursor-pointer disabled:bg-ink/10 disabled:text-ink-muted disabled:cursor-not-allowed"
               >
                 {isAnalyzing ? (
                   <span className="flex items-center gap-2">
-                    <span className="w-3 h-3 border border-white/40 border-t-transparent rounded-full animate-spin" />
+                    <span className="w-3 h-3 border border-current border-t-transparent animate-spin" />
                     Analyzing
                   </span>
                 ) : (
@@ -290,11 +316,11 @@ function DownloaderDashboard() {
           </form>
 
           {analysisError && (
-            <div className="mt-4 p-4 bg-red-500/5 border border-red-500/20 flex items-start gap-3 text-xs text-left max-w-3xl mx-auto">
-              <span className="text-red-400 font-mono font-bold text-[9px] tracking-[0.2em] uppercase bg-red-500/10 px-2 py-1 border border-red-500/15 shrink-0">
+            <div className="mt-4 card-brutalist p-4 flex items-start gap-3 text-xs text-left max-w-3xl mx-auto border-red/30">
+              <span className="text-red font-bold text-[10px] tracking-[0.2em] uppercase bg-red/10 px-2 py-1 border border-red/20 shrink-0">
                 Invalid
               </span>
-              <p className="leading-relaxed font-body text-red-300/80">
+              <p className="leading-relaxed text-ink/70">
                 {analysisError}
               </p>
             </div>
@@ -307,17 +333,17 @@ function DownloaderDashboard() {
 
         {/* ─── LOADING SKELETON ─── */}
         {isAnalyzing && (
-          <section className="w-full max-w-4xl mx-auto border border-white/5 p-6 md:p-8 animate-pulse">
+          <section className="w-full max-w-4xl mx-auto card-brutalist p-6 md:p-8 animate-pulse mb-20">
             <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
-              <div className="lg:col-span-4 aspect-video bg-white/5" />
+              <div className="lg:col-span-4 aspect-video bg-ink/5" />
               <div className="lg:col-span-6 flex flex-col justify-between py-2">
                 <div>
-                  <div className="h-2.5 bg-white/5 w-20 mb-3" />
-                  <div className="h-5 bg-white/5 w-3/4 mb-4" />
-                  <div className="h-3 bg-white/5 w-1/2 mb-2" />
-                  <div className="h-3 bg-white/5 w-5/6" />
+                  <div className="h-2.5 bg-ink/5 w-20 mb-3" />
+                  <div className="h-5 bg-ink/5 w-3/4 mb-4" />
+                  <div className="h-3 bg-ink/5 w-1/2 mb-2" />
+                  <div className="h-3 bg-ink/5 w-5/6" />
                 </div>
-                <div className="h-10 bg-white/5 w-full mt-6" />
+                <div className="h-10 bg-ink/5 w-full mt-6" />
               </div>
             </div>
           </section>
@@ -325,67 +351,89 @@ function DownloaderDashboard() {
 
         {/* ─── METADATA PREVIEW ─── */}
         {!isAnalyzing && analyzedMetadata && (
-          <section className="w-full max-w-5xl mx-auto" id="preview-panel-section">
+          <section className="w-full max-w-5xl mx-auto pb-20" id="preview-panel-section">
             <MetadataPreview />
           </section>
         )}
 
-        {/* ─── SEARCH & BROWSE ─── */}
+        {/* ─── SEARCH & BROWSE ─── (cream section) */}
         <section
-          className="w-full border-t border-white/5 pt-10"
+          className="w-full py-20 border-t border-sand"
           id="search-panel-section"
         >
-          <div className="flex flex-col items-center gap-2 mb-6 text-center">
-            <h2 className="text-lg font-display font-bold tracking-[0.15em] text-white/80 uppercase">
-              Discover &amp; Grab Streams
-            </h2>
-            <p className="text-xs text-white/30 font-body max-w-md">
-              Search live tags or browse historic completions instantly, with
-              single-click auto-fill triggers.
-            </p>
-          </div>
-          <SearchAndBrowse />
-        </section>
-
-        {/* ─── TRUST CARDS ─── */}
-        <section className="grid grid-cols-1 md:grid-cols-3 border-t border-white/5 pt-12 max-w-5xl mx-auto mb-14">
-          {[
-            {
-              label: "PRIVACY",
-              title: "Zero Tracker Policy",
-              desc: "No tracking tags, zero telemetry profiling, or device fingerprinting grids. Ever.",
-            },
-            {
-              label: "SPEED",
-              title: "Transmux Engine",
-              desc: "Bypasses platform cache limits to assemble dynamic segment streams in under 750ms.",
-            },
-            {
-              label: "SECURE",
-              title: "Sandboxed I/O",
-              desc: "Fully protected workspace proxy protecting raw client IP addresses and headers.",
-            },
-          ].map((card, i) => (
-            <div
-              key={i}
-              className="panel-hover p-6 flex flex-col gap-4 border-t md:border-t-0 md:border-l border-white/5 first:border-l-0"
-            >
-              <span className="text-[10px] font-display tracking-[0.3em] text-[#ff5b00]/60 uppercase">
-                {card.label}
-              </span>
-              <h5 className="text-sm font-display font-bold tracking-[0.1em] text-white/70 uppercase">
-                {card.title}
-              </h5>
-              <p className="text-xs text-white/35 font-body leading-relaxed">
-                {card.desc}
+          <div className="max-w-5xl mx-auto px-4 md:px-6">
+            <div className="flex flex-col items-center gap-2 mb-8 text-center">
+              <h2 className="text-lg font-bold tracking-tight text-ink/80">
+                Discover &amp; Grab Streams
+              </h2>
+              <p className="text-xs text-ink-muted max-w-md">
+                Search live tags or browse historic completions instantly, with
+                single-click auto-fill triggers.
               </p>
             </div>
-          ))}
+            <SearchAndBrowse />
+          </div>
         </section>
+
       </main>
+
+        {/* ─── TRUST CARDS ─── (burnt-orange section, full-width) */}
+        <section className="w-full bg-burnt-orange py-20">
+          <div className="max-w-5xl mx-auto px-4 md:px-6">
+            <div className="grid grid-cols-1 md:grid-cols-3">
+              {[
+                {
+                  label: "Privacy",
+                  title: "Zero Tracker Policy",
+                  desc: "No tracking tags, zero telemetry profiling, or device fingerprinting grids. Ever.",
+                },
+                {
+                  label: "Speed",
+                  title: "Transmux Engine",
+                  desc: "Bypasses platform cache limits to assemble dynamic segment streams in under 750ms.",
+                },
+                {
+                  label: "Secure",
+                  title: "Sandboxed I/O",
+                  desc: "Fully protected workspace proxy protecting raw client IP addresses and headers.",
+                },
+              ].map((card, i) => (
+                <div
+                  key={i}
+                  className="p-6 flex flex-col gap-4 border-t-0 md:border-t md:border-l-0 md:first:border-l border-sand/30 first:border-t"
+                >
+                  <span className="label-meta text-cream/70">{card.label}</span>
+                  <h5 className="text-sm font-bold text-cream">
+                    {card.title}
+                  </h5>
+                  <p className="text-xs text-cream/70 leading-relaxed">
+                    {card.desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
 
       {/* ─── QUEUE DRAWER ─── */}
       <QueueDrawer />
+
+      {/* ─── FOOTER ─── */}
+      <footer className="border-t border-sand bg-cream transition-colors duration-500">
+        <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <BrandLogo size={20} />
+            <span className="text-sm font-bold tracking-wide text-ink">NexLoad</span>
+            <span className="text-[10px] text-ink-muted tracking-wider hidden sm:inline">
+              &copy; {new Date().getFullYear()}
+            </span>
+          </div>
+          <p className="text-[10px] text-ink-muted tracking-wider text-center md:text-right">
+            Stream Extraction. Simplified. &mdash; No Tracking &bull; No Ads.
+          </p>
+        </div>
+      </footer>
 
       {/* ─── MODALS ─── */}
       <SettingsModal />

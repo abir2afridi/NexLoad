@@ -14,14 +14,15 @@ import {
   Moon,
   Sun,
   Monitor,
+  Terminal,
 } from "lucide-react";
 
 const ACCENT_PRESETS = [
-  { name: "Radioactive Orange", value: "#ff5b00" },
+  { name: "Editorial Blue", value: "#2563EB" },
   { name: "Neon Cyan", value: "#00e5ff" },
   { name: "Laser Red", value: "#ef4444" },
   { name: "Volt Green", value: "#22c55e" },
-  { name: "Cyber Blue", value: "#3b82f6" },
+  { name: "Royal Purple", value: "#7c3aed" },
   { name: "Magenta Shock", value: "#d946ef" },
   { name: "Amber Glow", value: "#f59e0b" },
   { name: "Slate Titanium", value: "#71717a" },
@@ -47,23 +48,23 @@ export const SettingsModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/20 animate-fade-in"
       id="settings-modal-backdrop"
       onClick={() => setSettingsOpen(false)}
     >
       <div
-        className="w-full max-w-2xl bg-black border border-white/10 shadow-[0_0_80px_rgba(255,91,0,0.06)] flex flex-col max-h-[90vh]"
+        className="w-full max-w-2xl card-brutalist bg-cream flex flex-col max-h-[90vh]"
         id="settings-modal-container"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex justify-between items-center px-6 py-4 border-b border-white/5">
-          <h3 className="text-sm font-display font-bold tracking-[0.15em] text-white uppercase">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-sand">
+          <h3 className="text-sm font-bold text-ink">
             Supercharger Settings
           </h3>
           <button
             onClick={() => setSettingsOpen(false)}
-            className="p-1.5 text-white/30 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+            className="p-1.5 text-ink-muted hover:text-ink hover:bg-ink/5 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -74,40 +75,44 @@ export const SettingsModal: React.FC = () => {
           {/* Appearance */}
           <div className="flex flex-col gap-4">
             <h4 className="label-meta flex items-center gap-2">
-              <Eye className="w-3 h-3 text-[#ff5b00]" />
+              <Eye className="w-3 h-3 text-amber" />
               Appearance
             </h4>
-            <div className="border border-white/5 p-5 flex flex-col gap-5">
+            <div className="card-brutalist-static p-5 flex flex-col gap-5">
               {/* Theme */}
               <div>
-                <span className="text-xs text-white/40 font-body tracking-wide mb-3 block">
+                <span className="label-meta block mb-3">
                   Theme Mode
                 </span>
-                <div className="flex gap-0 border border-white/10 w-fit">
+                <div className="flex gap-0 border border-sand w-fit">
                   {[
                     { mode: "dark" as const, icon: Moon, label: "Dark" },
+                    { mode: "dark2" as const, icon: Terminal, label: "Dark 2" },
                     { mode: "light" as const, icon: Sun, label: "Light" },
                     { mode: "system" as const, icon: Monitor, label: "System" },
-                  ].map(({ mode, icon: Icon, label }) => (
+                  ].map(({ mode, icon: Icon, label }, idx) => {
+                    const isNotLast = idx !== 3;
+                    return (
                     <button
                       key={mode}
                       onClick={() => setThemeMode(mode)}
-                      className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all cursor-pointer ${
+                      className={`flex items-center gap-2 px-4 py-2 text-xs tracking-wider uppercase transition-all cursor-pointer ${
                         themeMode === mode
-                          ? "bg-[#ff5b00] text-white"
-                          : "bg-transparent text-white/40 hover:text-white hover:bg-white/5"
-                      } ${mode !== "system" ? "border-r border-white/10" : ""}`}
+                          ? "bg-amber text-white"
+                          : "bg-transparent text-ink-muted hover:text-ink hover:bg-ink/5"
+                      } ${isNotLast ? "border-r border-sand" : ""}`}
                     >
                       <Icon className="w-3 h-3" />
                       {label}
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Accent */}
               <div>
-                <span className="text-xs text-white/40 font-body tracking-wide mb-3 block">
+                <span className="label-meta block mb-3">
                   Accent Color
                 </span>
                 <div className="flex flex-wrap gap-1">
@@ -115,10 +120,10 @@ export const SettingsModal: React.FC = () => {
                     <button
                       key={col.value}
                       onClick={() => updateSettings({ accentColor: col.value })}
-                      className={`flex items-center gap-2 px-3 py-1.5 border text-[10px] font-display tracking-wider uppercase transition-all cursor-pointer ${
+                      className={`flex items-center gap-2 px-3 py-1.5 border text-[10px] tracking-wider uppercase transition-all cursor-pointer ${
                         settings.accentColor === col.value
-                          ? "border-[#ff5b00] bg-[#ff5b00]/10 text-white"
-                          : "border-white/10 text-white/30 hover:text-white/60 hover:border-white/20"
+                          ? "border-amber bg-amber/10 text-ink"
+                          : "border-sand text-ink-muted hover:text-ink-light hover:border-sand-medium"
                       }`}
                     >
                       <span
@@ -130,16 +135,14 @@ export const SettingsModal: React.FC = () => {
                   ))}
                 </div>
                 <div className="flex items-center gap-2.5 mt-3">
-                  <span className="text-[10px] font-mono text-white/30 uppercase tracking-wider">
-                    Hex
-                  </span>
+                  <span className="label-meta">Hex</span>
                   <input
                     type="text"
                     value={settings.accentColor}
                     onChange={(e) =>
                       updateSettings({ accentColor: e.target.value })
                     }
-                    className="bg-transparent border border-white/10 px-3 py-1 text-xs font-mono text-white/60 focus:border-[#ff5b00] focus:outline-none w-28 uppercase transition-all"
+                    className="bg-transparent border border-sand px-3 py-1 text-xs text-ink-light focus:border-amber focus:outline-none w-28 uppercase transition-all"
                   />
                 </div>
               </div>
@@ -150,9 +153,9 @@ export const SettingsModal: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-4">
               <h4 className="label-meta">Media Transcoding Presets</h4>
-              <div className="border border-white/5 p-4 flex flex-col gap-4">
+                <div className="card-brutalist-static p-4 flex flex-col gap-4">
                 <div>
-                  <label className="text-[10px] text-white/40 font-body tracking-wide mb-2 block uppercase">
+                  <label className="label-meta block mb-2">
                     Quality
                   </label>
                   <select
@@ -160,7 +163,7 @@ export const SettingsModal: React.FC = () => {
                     onChange={(e: any) =>
                       updateSettings({ defaultQuality: e.target.value })
                     }
-                    className="w-full bg-transparent border border-white/10 px-3 py-2 text-xs text-white/60 focus:border-[#ff5b00] focus:outline-none transition-all cursor-pointer font-body"
+                    className="w-full bg-cream-dark border border-sand px-3 py-2 text-xs text-ink-light focus:border-amber focus:outline-none transition-all cursor-pointer"
                   >
                     <option value="best">Best (Maximum Available)</option>
                     <option value="2160p">4K (2160p HDR)</option>
@@ -170,7 +173,7 @@ export const SettingsModal: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] text-white/40 font-body tracking-wide mb-2 block uppercase">
+                  <label className="label-meta block mb-2">
                     Audio Format
                   </label>
                   <select
@@ -178,7 +181,7 @@ export const SettingsModal: React.FC = () => {
                     onChange={(e: any) =>
                       updateSettings({ defaultAudioFormat: e.target.value })
                     }
-                    className="w-full bg-transparent border border-white/10 px-3 py-2 text-xs text-white/60 focus:border-[#ff5b00] focus:outline-none transition-all cursor-pointer font-body"
+                    className="w-full bg-cream-dark border border-sand px-3 py-2 text-xs text-ink-light focus:border-amber focus:outline-none transition-all cursor-pointer"
                   >
                     <option value="mp3">MPEG-3 (.mp3)</option>
                     <option value="wav">Lossless Wave (.wav)</option>
@@ -192,7 +195,7 @@ export const SettingsModal: React.FC = () => {
 
             <div className="flex flex-col gap-4">
               <h4 className="label-meta">Advanced Pipeline</h4>
-              <div className="border border-white/5 p-4 flex flex-col gap-3">
+              <div className="card-brutalist-static p-4 flex flex-col gap-3">
                 {[
                   {
                     label: "Force AV1 Codec",
@@ -215,10 +218,10 @@ export const SettingsModal: React.FC = () => {
                     className="flex items-center justify-between py-1.5"
                   >
                     <div>
-                      <div className="text-xs font-display tracking-wider text-white/60 uppercase">
+                      <div className="text-xs text-ink-light">
                         {label}
                       </div>
-                      <div className="text-[9px] text-white/25 font-mono">
+                      <div className="text-[9px] text-ink-muted">
                         {desc}
                       </div>
                     </div>
@@ -228,7 +231,7 @@ export const SettingsModal: React.FC = () => {
                       onChange={(e) =>
                         updateSettings({ [key]: e.target.checked } as any)
                       }
-                      className="w-3.5 h-3.5 accent-[#ff5b00] cursor-pointer"
+                      className="w-3.5 h-3.5 accent-amber cursor-pointer"
                     />
                   </div>
                 ))}
@@ -240,19 +243,19 @@ export const SettingsModal: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-4">
               <h4 className="label-meta flex items-center gap-2">
-                <HardDrive className="w-3 h-3 text-[#ff5b00]" />
+                <HardDrive className="w-3 h-3 text-amber" />
                 Naming Formats
               </h4>
-              <div className="border border-white/5 p-4 flex flex-col gap-3">
-                <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-mono text-white/30 uppercase tracking-wider">
+              <div className="card-brutalist-static p-4 flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-1.5 text-[9px] text-ink-muted uppercase tracking-wider">
                   <span>Tags:</span>
-                  <code className="px-1 py-0.5 bg-white/5 border border-white/10 text-[#ff5b00]">
+                  <code className="px-1 py-0.5 bg-parchment border border-sand text-amber">
                     {"{title}"}
                   </code>
-                  <code className="px-1 py-0.5 bg-white/5 border border-white/10 text-[#ff5b00]">
+                  <code className="px-1 py-0.5 bg-parchment border border-sand text-amber">
                     {"{quality}"}
                   </code>
-                  <code className="px-1 py-0.5 bg-white/5 border border-white/10 text-[#ff5b00]">
+                  <code className="px-1 py-0.5 bg-parchment border border-sand text-amber">
                     {"{date}"}
                   </code>
                 </div>
@@ -262,23 +265,23 @@ export const SettingsModal: React.FC = () => {
                   onChange={(e) =>
                     updateSettings({ filenameTemplate: e.target.value })
                   }
-                  className="bg-transparent border border-white/10 px-3 py-2 text-xs font-mono text-white/60 focus:border-[#ff5b00] focus:outline-none w-full"
+                  className="bg-cream-dark border border-sand px-3 py-2 text-xs text-ink-light focus:border-amber focus:outline-none w-full"
                 />
               </div>
             </div>
 
             <div className="flex flex-col gap-4">
               <h4 className="label-meta flex items-center gap-2">
-                <Shield className="w-3 h-3 text-[#ff5b00]" />
+                <Shield className="w-3 h-3 text-amber" />
                 Search Privacy
               </h4>
-              <div className="border border-white/5 p-4 flex flex-col gap-3 min-h-[82px] justify-center">
+              <div className="card-brutalist-static p-4 flex flex-col gap-3 min-h-[82px] justify-center">
                 <div className="flex items-center justify-between py-1">
                   <div>
-                    <div className="text-xs font-display tracking-wider text-white/60 uppercase">
+                    <div className="text-xs text-ink-light">
                       Strict SafeSearch
                     </div>
-                    <div className="text-[9px] text-white/25 font-mono">
+                    <div className="text-[9px] text-ink-muted">
                       Filters unsafe tags
                     </div>
                   </div>
@@ -288,7 +291,7 @@ export const SettingsModal: React.FC = () => {
                     onChange={(e) =>
                       updateSettings({ safeSearch: e.target.checked })
                     }
-                    className="w-3.5 h-3.5 accent-[#ff5b00] cursor-pointer"
+                    className="w-3.5 h-3.5 accent-amber cursor-pointer"
                   />
                 </div>
               </div>
@@ -297,17 +300,17 @@ export const SettingsModal: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <div className="flex justify-between items-center px-6 py-4 border-t border-white/5">
+        <div className="flex justify-between items-center px-6 py-4 border-t border-sand">
           <button
             onClick={resetSettings}
-            className="text-[10px] font-display tracking-wider text-white/30 hover:text-white uppercase transition-all cursor-pointer flex items-center gap-1.5"
+            className="text-[10px] tracking-wider text-ink-muted hover:text-ink uppercase transition-all cursor-pointer flex items-center gap-1.5"
           >
             <RefreshCw className="w-3 h-3" />
             Reset Defaults
           </button>
           <button
             onClick={() => setSettingsOpen(false)}
-            className="px-5 py-2 bg-[#ff5b00] hover:bg-[#e65200] text-white text-xs font-display tracking-[0.15em] uppercase transition-all cursor-pointer"
+            className="px-5 py-2 bg-amber hover:bg-ink text-white text-xs tracking-[0.15em] uppercase transition-all cursor-pointer"
           >
             Save
           </button>

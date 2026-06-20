@@ -155,12 +155,76 @@ export const SearchAndBrowse: React.FC = () => {
     }
   };
 
+  const TabButton = ({
+    tab,
+    icon: Icon,
+    label,
+  }: {
+    tab: typeof activeTab;
+    icon: React.ComponentType<{ className?: string }>;
+    label: string;
+  }) => (
+    <button
+      onClick={() => {
+        if (tab === "search" && searchResults.length === 0) {
+          setActiveTab("search");
+          setSearchQuery("Latest Synthwave Mixes");
+          setTimeout(() => handleSearchCommit(), 50);
+        } else {
+          setActiveTab(tab);
+        }
+      }}
+      className={`pb-3 flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+        activeTab === tab
+          ? "border-amber text-ink"
+          : "border-transparent text-ink-muted hover:text-ink-light"
+      }`}
+    >
+      <Icon className={`w-3.5 h-3.5 ${activeTab === tab ? "text-amber" : "text-ink-muted"}`} />
+      <span className="text-[10px] uppercase tracking-[0.2em]">{label}</span>
+    </button>
+  );
+
+  const ResultCard = ({ item }: { item: SearchResult; key?: React.Key }) => (
+    <div
+      onClick={() => selectMediaItem(item.url)}
+      className="card-brutalist bg-cream flex flex-col justify-between cursor-pointer"
+    >
+      <div>
+        <div className="relative aspect-video bg-ink/[0.02]">
+          <img
+            src={item.thumbnail}
+            alt={item.title}
+            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
+          />
+          <div className="absolute bottom-2 right-2 bg-cream-dark px-2 py-0.5 border border-sand text-[9px] text-ink-light">
+            {item.durationLabel}
+          </div>
+        </div>
+        <div className="p-4">
+          <span className="text-[8px] tracking-[0.25em] text-amber uppercase block mb-1.5">
+            {item.platform}
+          </span>
+          <h4 className="text-ink/70 text-sm leading-snug line-clamp-2">
+            {item.title}
+          </h4>
+          <p className="text-ink-muted text-xs mt-2">{item.author}</p>
+        </div>
+      </div>
+      <div className="p-4 pt-0 flex justify-between items-center text-[9px] text-ink-muted">
+        <span>{item.viewsLabel}</span>
+        <span>{item.uploadDateLabel}</span>
+      </div>
+    </div>
+  );
+
   return (
     <div className="w-full mt-6" id="browser-panel-root">
       {/* Search Bar */}
       <form
         onSubmit={handleSearchCommit}
-        className="flex gap-0 max-w-2xl mx-auto mb-10 border border-white/10 focus-within:border-[#ff5b00] transition-all"
+        className="card-brutalist flex gap-0 max-w-2xl mx-auto mb-10 focus-within:border-amber transition-all"
         id="in-app-search-form"
       >
         <div className="relative flex-1 flex items-center">
@@ -169,16 +233,16 @@ export const SearchAndBrowse: React.FC = () => {
             placeholder="Search YouTube, SoundCloud, Vimeo..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-transparent border-none py-3 pl-10 pr-4 text-sm text-white/80 placeholder-white/20 focus:outline-none font-body"
+            className="w-full bg-transparent border-none py-3 pl-10 pr-4 text-sm text-ink/80 placeholder-ink-subtle/60 focus:outline-none"
           />
-          <Search className="absolute left-3 w-4 h-4 text-white/20" />
+          <Search className="absolute left-3 w-4 h-4 text-ink-muted" />
         </div>
         <button
           type="submit"
-          className="bg-[#ff5b00] hover:bg-[#e65200] text-white px-6 py-3 text-xs font-display tracking-[0.15em] uppercase transition-all flex items-center gap-1.5"
+          className="bg-amber hover:bg-ink text-white px-6 py-3 text-xs tracking-[0.15em] uppercase transition-all flex items-center gap-1.5"
         >
           {isSearching ? (
-            <div className="w-4 h-4 border-2 border-white/30 border-t-white animate-spin" />
+            <div className="w-4 h-4 border-2 border-current border-t-transparent animate-spin" />
           ) : (
             "Search"
           )}
@@ -186,34 +250,11 @@ export const SearchAndBrowse: React.FC = () => {
       </form>
 
       {/* Tabs */}
-      <div className="flex border-b border-white/5 justify-center w-full mb-8">
-        <div className="flex gap-8 text-[10px] font-display uppercase tracking-[0.2em]">
-          {[
-            { key: "trending" as const, icon: Flame, label: "Trending" },
-            { key: "search" as const, icon: Search, label: "Search Results" },
-            { key: "history" as const, icon: History, label: "History" },
-          ].map(({ key, icon: Icon, label }) => (
-            <button
-              key={key}
-              onClick={() => {
-                if (key === "search" && searchResults.length === 0) {
-                  setActiveTab("search");
-                  setSearchQuery("Latest Synthwave Mixes");
-                  setTimeout(() => handleSearchCommit(), 50);
-                } else {
-                  setActiveTab(key);
-                }
-              }}
-              className={`pb-3 flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
-                activeTab === key
-                  ? "border-[#ff5b00] text-white"
-                  : "border-transparent text-white/30 hover:text-white/60"
-              }`}
-            >
-              <Icon className={`w-3.5 h-3.5 ${activeTab === key ? "text-[#ff5b00]" : "text-white/30"}`} />
-              {label}
-            </button>
-          ))}
+      <div className="flex border-b border-sand justify-center w-full mb-8">
+        <div className="flex gap-8">
+          <TabButton tab="trending" icon={Flame} label="Trending" />
+          <TabButton tab="search" icon={Search} label="Search Results" />
+          <TabButton tab="history" icon={History} label="History" />
         </div>
       </div>
 
@@ -221,40 +262,9 @@ export const SearchAndBrowse: React.FC = () => {
       <div className="w-full">
         {/* Trending */}
         {activeTab === "trending" && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-white/5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-sand/30">
             {trendingItems.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => selectMediaItem(item.url)}
-                className="panel-hover bg-black flex flex-col justify-between cursor-pointer"
-              >
-                <div>
-                  <div className="relative aspect-video bg-black overflow-hidden">
-                    <img
-                      src={item.thumbnail}
-                      alt={item.title}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-0.5 border border-white/10 text-[9px] font-mono text-white/50">
-                      {item.durationLabel}
-                    </div>
-                  </div>
-                  <div className="p-4">
-                    <span className="text-[8px] uppercase font-display tracking-[0.25em] text-[#ff5b00] block mb-1.5">
-                      {item.platform}
-                    </span>
-                    <h4 className="text-white/70 font-display text-sm tracking-wider uppercase leading-snug line-clamp-2">
-                      {item.title}
-                    </h4>
-                    <p className="text-white/30 text-xs mt-2 font-body">{item.author}</p>
-                  </div>
-                </div>
-                <div className="p-4 pt-0 flex justify-between items-center text-[9px] font-mono text-white/25">
-                  <span>{item.viewsLabel}</span>
-                  <span>{item.uploadDateLabel}</span>
-                </div>
-              </div>
+              <ResultCard key={item.id} item={item} />
             ))}
           </div>
         )}
@@ -264,54 +274,23 @@ export const SearchAndBrowse: React.FC = () => {
           <div>
             {isSearching ? (
               <div className="py-20 text-center flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-2 border-[#ff5b00]/30 border-t-[#ff5b00] animate-spin" />
-                <span className="text-sm font-mono text-white/30">Parsing live search indexer databases...</span>
+                <div className="w-8 h-8 border-2 border-amber/30 border-t-amber animate-spin" />
+                <span className="text-sm text-ink-muted">Parsing live search indexer databases...</span>
               </div>
             ) : searchResults.length === 0 ? (
               <div className="py-16 text-center">
-                <Search className="w-10 h-10 text-white/10 mx-auto mb-4" />
-                <h4 className="text-white/60 font-display text-sm tracking-wider uppercase">
+                <Search className="w-10 h-10 text-ink/10 mx-auto mb-4" />
+                <h4 className="text-ink-light text-sm">
                   No active search outcomes yet
                 </h4>
-                <p className="text-white/30 text-xs mt-1 max-w-sm mx-auto font-body">
+                <p className="text-ink-muted text-xs mt-1 max-w-sm mx-auto">
                   Type any keywords above to search and parse directly.
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-white/5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-sand/30">
                 {searchResults.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => selectMediaItem(item.url)}
-                    className="panel-hover bg-black flex flex-col justify-between cursor-pointer"
-                  >
-                    <div>
-                      <div className="relative aspect-video bg-black overflow-hidden">
-                        <img
-                          src={item.thumbnail}
-                          alt={item.title}
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-0.5 border border-white/10 text-[9px] font-mono text-white/50">
-                          {item.durationLabel}
-                        </div>
-                      </div>
-                      <div className="p-4">
-                        <span className="text-[8px] uppercase font-display tracking-[0.25em] text-[#ff5b00] block mb-1.5">
-                          {item.platform}
-                        </span>
-                        <h4 className="text-white/70 font-display text-sm tracking-wider uppercase leading-snug line-clamp-2">
-                          {item.title}
-                        </h4>
-                        <p className="text-white/30 text-xs mt-2 font-body">{item.author}</p>
-                      </div>
-                    </div>
-                    <div className="p-4 pt-0 flex justify-between items-center text-[9px] font-mono text-white/25">
-                      <span>{item.viewsLabel || "84.2K views"}</span>
-                      <span>{item.uploadDateLabel || "Recently parsed"}</span>
-                    </div>
-                  </div>
+                  <ResultCard key={item.id} item={item} />
                 ))}
               </div>
             )}
@@ -322,53 +301,53 @@ export const SearchAndBrowse: React.FC = () => {
         {activeTab === "history" && (
           <div className="max-w-4xl mx-auto">
             {historyItems.length === 0 ? (
-              <div className="py-16 text-center border border-white/5">
-                <History className="w-10 h-10 text-white/10 mx-auto mb-4" />
-                <h4 className="text-white/60 font-display text-sm tracking-wider uppercase">
+              <div className="py-16 text-center card-brutalist-static">
+                <History className="w-10 h-10 text-ink/10 mx-auto mb-4" />
+                <h4 className="text-ink-light text-sm">
                   No downloads completed yet
                 </h4>
-                <p className="text-white/30 text-xs mt-1 font-body">
+                <p className="text-ink-muted text-xs mt-1">
                   When you successfully download items, they will log here securely.
                 </p>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="flex justify-between items-center px-4 mb-2">
-                  <span className="text-[10px] font-mono text-white/30">
+                  <span className="text-[10px] text-ink-muted">
                     Showing {historyItems.length} Saved Records
                   </span>
                   <button
                     onClick={handlePruneBulkHistory}
-                    className="text-[10px] font-mono text-red-400 hover:text-red-300 uppercase tracking-wider transition-colors flex items-center gap-1 cursor-pointer"
+                    className="text-[10px] text-red uppercase tracking-wider transition-colors flex items-center gap-1 cursor-pointer hover:text-red/70"
                   >
                     <Trash2 className="w-3 h-3" /> Clear All
                   </button>
                 </div>
 
-                <div className="flex flex-col gap-px bg-white/5">
+                <div className="flex flex-col gap-px bg-sand/30">
                   {historyItems.map((item) => (
                     <div
                       key={item.id}
-                      className="panel-hover bg-black p-4 flex items-center justify-between gap-4"
+                      className="card-brutalist-static bg-cream p-4 flex items-center justify-between gap-4"
                     >
                       <div className="flex items-center gap-4 flex-1 min-w-0">
                         <img
                           src={item.thumbnail}
                           alt={item.title}
-                          className="w-16 md:w-20 aspect-video object-cover bg-black border border-white/5"
+                          className="w-16 md:w-20 aspect-video object-cover bg-ink/[0.02] border border-sand"
                           referrerPolicy="no-referrer"
                         />
                         <div className="flex-1 min-w-0">
-                          <span className="text-[8px] uppercase font-display tracking-[0.25em] text-white/30 bg-white/[0.03] px-2 py-0.5 border border-white/5 mb-1 inline-block">
+                          <span className="text-[8px] tracking-[0.25em] text-ink-muted bg-ink/[0.03] px-2 py-0.5 border border-sand/20 mb-1 inline-block uppercase">
                             {item.platform}
                           </span>
-                          <h4 className="text-sm font-display tracking-wider uppercase truncate text-white/70">
+                          <h4 className="text-sm text-ink/70 truncate">
                             {item.title}
                           </h4>
-                          <p className="text-[10px] text-white/30 font-body truncate mt-0.5">
+                          <p className="text-[10px] text-ink-muted truncate mt-0.5">
                             {item.author} &bull; {item.durationLabel} &bull;{" "}
-                            <span className="font-mono text-[#ff5b00]">{item.quality}</span>{" "}
-                            <span className="font-mono text-white/20">({item.format.toUpperCase()})</span>
+                            <span className="text-amber">{item.quality}</span>{" "}
+                            <span className="text-ink-muted">({item.format.toUpperCase()})</span>
                           </p>
                         </div>
                       </div>
@@ -377,14 +356,14 @@ export const SearchAndBrowse: React.FC = () => {
                         <button
                           onClick={() => selectMediaItem(item.url)}
                           title="Parse again"
-                          className="p-2.5 border border-white/10 hover:border-[#ff5b00]/40 text-white/30 hover:text-white transition-all cursor-pointer"
+                          className="p-2.5 border border-sand hover:border-amber/40 text-ink-muted hover:text-ink transition-all cursor-pointer"
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handlePruneSingleHistory(item.id)}
                           title="Delete record"
-                          className="p-2.5 border border-white/5 hover:border-red-500/30 hover:text-red-400 text-white/30 transition-all cursor-pointer"
+                          className="p-2.5 border border-sand/20 hover:border-red/30 hover:text-red text-ink-muted transition-all cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

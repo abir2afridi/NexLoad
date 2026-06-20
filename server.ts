@@ -7,30 +7,15 @@ import express from "express";
 import path from "path";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
-import { DownloadState, MediaMetadata, SearchResultItem } from "./src/types";
-
-// Initialize Gemini API client with appropriate headers
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      "User-Agent": "aistudio-build",
-    },
-  },
-});
+import { DownloadState, MediaMetadata, SearchResultItem, MediaFormat } from "./src/types";
 
 const app = express();
 const PORT = 3000;
 
-// Enable trust proxy so express-rate-limit works behind Nginx or Cloud Run proxies
 app.set("trust proxy", 1);
-
-// JSON body parsing size limit
 app.use(express.json({ limit: "5mb" }));
 
-// Security Headers with Helmet (Custom configuration to support iframe rendering and styling)
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -49,21 +34,17 @@ app.use(
   })
 );
 
-// Apply CORS manually with custom allows to ensure zero sandbox limitations
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
   res.setHeader("Access-Control-Allow-Headers", "X-Requested-With,content-type,Authorization");
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
+  if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
 
-// Rate limiters (Security Architecture Part 10)
 const metadataLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30, // 30 requests per IP
+  windowMs: 60 * 1000,
+  max: 30,
   message: { error: "Too many URL analyses. Please wait a minute." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -85,71 +66,26 @@ const downloadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// SSRF Blocklist Validation (Security Architecture Sec 10)
 function isSsrfBlocklisted(urlStr: string): boolean {
   try {
     const url = new URL(urlStr);
     const hostname = url.hostname.toLowerCase();
-
-    // Check specific hostnames
     if (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname === "[::1]" ||
-      hostname === "metadata.google.internal" ||
-      hostname === "metadata" ||
-      hostname === "169.254.169.254"
-    ) {
-      return true;
-    }
-
-    // SSRF IP subnets / private network patterns
+      hostname === "localhost" || hostname === "127.0.0.1" ||
+      hostname === "[::1]" || hostname === "metadata.google.internal" ||
+      hostname === "metadata" || hostname === "169.254.169.254"
+    ) return true;
     const privateIpRegex = /^(0\.|10\.|100\.64\.|127\.|169\.254\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.0\.0\.|192\.168\.|198\.18\.|198\.51\.100\.|203\.0\.113\.|240\.)/;
-    if (privateIpRegex.test(hostname)) {
-      return true;
-    }
-
+    if (privateIpRegex.test(hostname)) return true;
     return false;
   } catch {
-    return true; // Block invalid URLs
+    return true;
   }
 }
 
-// In-Memory Database/Job Queue Store (emulates BullMQ)
-interface ActiveJob {
-  id: string;
-  url: string;
-  platform: string;
-  title: string;
-  thumbnail: string;
-  formatId: string;
-  quality: string;
-  state: DownloadState;
-  progress: number;
-  speedMbps: number;
-  etaSeconds: number;
-  fileSizeLabel: string;
-  error?: string;
-  downloadUrl?: string;
-  createdAt: number;
-  contentData?: Buffer; // mock created file
-  fileName?: string;
-}
+type PlatformId = "youtube" | "tiktok" | "instagram" | "reddit" | "soundcloud" | "vimeo" | "twitch" | "facebook" | "twitter" | "pinterest" | "generic";
 
-const activeJobsStore = new Map<string, ActiveJob>();
-
-// Cleanup old jobs every 10 minutes (Task Lifecycle & Memory management)
-setInterval(() => {
-  const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
-  for (const [id, job] of activeJobsStore.entries()) {
-    if (job.createdAt < tenMinutesAgo) {
-      activeJobsStore.delete(id);
-    }
-  }
-}, 10 * 60 * 1000);
-
-// Platform details extraction
-function extractPlatform(urlStr: string): MediaMetadata["platform"] {
+function extractPlatform(urlStr: string): PlatformId {
   try {
     const url = new URL(urlStr);
     const host = url.hostname.toLowerCase();
@@ -169,291 +105,383 @@ function extractPlatform(urlStr: string): MediaMetadata["platform"] {
   }
 }
 
-// API Health Check
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", time: new Date().toISOString() });
+function generateFormats(platform: PlatformId): MediaFormat[] {
+  const formats: MediaFormat[] = [
+    {
+      id: "best_mp4_2160p", ext: "mp4", resolution: "2160p",
+      qualityLabel: "4K (60fps) HDR MP4", fps: 60,
+      sizeBytes: 157286400, sizeLabel: "150.0 MB",
+      hasVideo: true, hasAudio: true, container: "mp4",
+    },
+    {
+      id: "best_mp4_1080p", ext: "mp4", resolution: "1080p",
+      qualityLabel: "1080p (60fps) MP4", fps: 60,
+      sizeBytes: 78643200, sizeLabel: "75.0 MB",
+      hasVideo: true, hasAudio: true, container: "mp4",
+    },
+    {
+      id: "medium_mp4_720p", ext: "mp4", resolution: "720p",
+      qualityLabel: "720p (30fps) MP4", fps: 30,
+      sizeBytes: 41943040, sizeLabel: "40.0 MB",
+      hasVideo: true, hasAudio: true, container: "mp4",
+    },
+    {
+      id: "low_mp4_480p", ext: "mp4", resolution: "480p",
+      qualityLabel: "480p (30fps) MP4", fps: 30,
+      sizeBytes: 20971520, sizeLabel: "20.0 MB",
+      hasVideo: true, hasAudio: true, container: "mp4",
+    },
+    {
+      id: "audio_mp3_320", ext: "mp3", resolution: "Audio Only",
+      qualityLabel: "Audio Only - High (320kbps MP3)",
+      sizeBytes: 12582912, sizeLabel: "12.0 MB",
+      hasVideo: false, hasAudio: true, bitrate: 320, container: "mp3",
+    },
+    {
+      id: "audio_flac", ext: "flac", resolution: "Audio Only",
+      qualityLabel: "Audio Only - Lossless FLAC",
+      sizeBytes: 31457280, sizeLabel: "30.0 MB",
+      hasVideo: false, hasAudio: true, bitrate: 1411, container: "flac",
+    },
+  ];
+  return formats;
+}
+
+function extractMediaId(urlStr: string): string {
+  try {
+    const url = new URL(urlStr);
+    if (url.hostname.includes("youtu.be")) return url.pathname.slice(1).split("?")[0] || "unknown";
+    if (url.hostname.includes("youtube.com")) {
+      const listId = url.searchParams.get("list");
+      const v = url.searchParams.get("v");
+      if (listId && !v) return listId;
+      if (v) return v;
+      const paths = url.pathname.split("/");
+      for (let i = 0; i < paths.length; i++) {
+        if (paths[i] === "shorts" && paths[i + 1]) return paths[i + 1];
+        if (paths[i] === "watch" && paths[i + 1]) return paths[i + 1];
+      }
+    }
+    return url.pathname.split("/").filter(Boolean).pop() || "unknown";
+  } catch {
+    return Math.random().toString(36).substring(2, 11);
+  }
+}
+
+function generateMockMetadata(url: string, platform: PlatformId): MediaMetadata {
+  const id = extractMediaId(url);
+  const now = new Date();
+  const daysAgo = Math.floor(Math.random() * 120);
+  const uploadDate = new Date(now.getTime() - daysAgo * 86400000).toISOString();
+  const duration = Math.floor(Math.random() * 900) + 60;
+
+  const isPlaylist = /[?&]list=|playlist|album|set|compilation|\/playlist\/|series|\/albums\/|\/sets\//i.test(url);
+
+  const titles: Record<PlatformId, string[]> = {
+    youtube: [
+      "How to Build a Full-Stack App in 2026",
+      "Deep Dive into React Server Components",
+      "The Future of AI-Assisted Development",
+      "Building Scalable APIs with Node.js",
+      "Complete Guide to TypeScript 5.8",
+    ],
+    tiktok: [
+      "This simple coding trick blew my mind!",
+      "Learn Python in 60 seconds",
+      "Dev life hack you need to know",
+      "Why your code is slow (and how to fix it)",
+      "The fastest way to debug JavaScript",
+    ],
+    instagram: [
+      "Morning Dev Setup 🌅",
+      "My Home Office Tour 2026",
+      "Keyboard Setup for Programmers",
+      "Late Night Coding Session",
+      "Minimalist Desk Setup",
+    ],
+    reddit: [
+      "TIL about this amazing open source tool",
+      "I built the same app 5 times with 5 frameworks",
+      "What's your unpopular programming opinion?",
+      "Show off your terminal setup",
+      "The best VS Code extensions in 2026",
+    ],
+    soundcloud: [
+      "Lofi Study Beats - Chilled Relaxation Mix",
+      "Synthwave Sunset - Retro Electronic",
+      "Deep Focus - Instrumental Programming Mix",
+      "Ambient Works for Coding Sessions",
+      "Jazz Hop Beats to Code To",
+    ],
+    vimeo: [
+      "Symphony of Light - Cinematic Experience",
+      "Abstract Visuals for Creative Minds",
+      "Short Film: The Last Debug Session",
+      "Motion Design Showreel 2026",
+      "Documentary: The Art of Code",
+    ],
+    twitch: [
+      "Live Coding: Building a Game in Rust",
+      "React Components from Scratch",
+      "Late Night Hack Session",
+      "Code Review with Chat",
+      "Building CLI Tools with Node.js",
+    ],
+    facebook: [
+      "How I automated my entire workflow",
+      "Coding vs No-Code: Which is better?",
+      "The app that changed everything",
+      "My journey learning web development",
+      "Behind the scenes of our latest feature",
+    ],
+    twitter: [
+      "Hot take: tabs > spaces",
+      "Just shipped a new feature!",
+      "Thread: Everything I learned about APIs",
+      "This library is absolutely insane",
+      "POV: You just fixed a 3-day old bug",
+    ],
+    pinterest: [
+      "Ultimate Web Developer Toolkit 2026",
+      "Color Palette Generator for Devs",
+      "UI/UX Design Inspiration Board",
+      "Free Icon Sets for Your Next Project",
+      "Typography Guide for Developers",
+    ],
+    generic: [
+      "Media File Extracted for Download",
+      "Stream Archive - Processed Content",
+      "Download Ready - Optimized Media",
+      "Processed Stream File",
+      "Extracted Media Content",
+    ],
+  };
+
+  const title = titles[platform]?.[Math.floor(Math.random() * titles[platform].length)] || "Untitled Media";
+  const displayTitle = isPlaylist ? `${title} (Full Playlist)` : title;
+
+  const authorNames: Record<PlatformId, string[]> = {
+    youtube: ["TechWithTim", "CodeAcademy", "ThePrimeagen", "Fireship", "WebDevSimplified"],
+    tiktok: ["code.with.john", "tech_tok", "dev_raps", "python_wiz", "js_mastery"],
+    instagram: ["devgram", "code_daily", "tech_hub", "programmer.life", "dev_setups"],
+    reddit: ["u/programmerhumor", "u/coding", "u/webdev", "u/learnprogramming", "u/github"],
+    soundcloud: ["Chillhop Music", "LoFi Girl", "Synthwave Nation", "Ambient Realms", "Jazz Hop Cafe"],
+    vimeo: ["Visual Arts Lab", "Motion House", "Digital Studio", "Creative Code", "Future Films"],
+    twitch: ["ThePrimeagen", "PirateSoftware", "tsoding", "Theo", "LowLevelLearning"],
+    facebook: ["Tech Chronicles", "CodeDaily", "DevLife", "WebDev World", "App Builders"],
+    twitter: ["@jasonmccb", "@t3dotgg", "@kharioki", "@cassidoo", "@mxstbr"],
+    pinterest: ["Design Hub", "Dev Inspiration", "UI Collective", "Creative Code Lab", "Pixel Perfect"],
+    generic: ["Content Creator", "Media Producer", "Stream Publisher", "Digital Artist", "Archive Bot"],
+  };
+
+  const author = authorNames[platform]?.[Math.floor(Math.random() * authorNames[platform].length)] || "Unknown Author";
+  const views = Math.floor(Math.random() * 5000000) + 1000;
+  const likes = Math.floor(views * (Math.random() * 0.05 + 0.01));
+
+  const playlistTrackNames: Record<string, string[]> = {
+    youtube: ["Introduction & Setup", "Core Concepts Explained", "Hands-On Implementation", "Advanced Techniques", "Real-World Examples", "Performance Optimization", "Testing & Debugging", "Deployment Guide", "Best Practices", "Q&A & Wrap-Up"],
+    soundcloud: ["Intro (Ambient Mix)", "Deep House Session", "Lo-Fi Beats", "Chill Electronic", "Synthwave Sunset", "Jazz Fusion", "Ambient Soundscape", "Downtempo Groove"],
+    tiktok: ["Day 1 Challenge", "Behind the Scenes", "Tutorial Part 1", "Reaction Video", "Tips & Tricks", "Final Reveal"],
+    generic: ["Track 01", "Track 02", "Track 03", "Track 04", "Track 05", "Track 06", "Track 07", "Track 08"],
+  };
+  const trackNames = isPlaylist ? (playlistTrackNames[platform] || playlistTrackNames.generic) : [];
+  const playlistCount = trackNames.length;
+
+  function thumbnailFor(id: string, platform: PlatformId, isPlaylist: boolean): string {
+    if (isPlaylist) {
+      return "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=60";
+    }
+    if (platform === "youtube" && id && id !== "unknown") {
+      return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+    }
+    const fallbacks: Record<string, string> = {
+      youtube: "https://i.ytimg.com/vi/default/hqdefault.jpg",
+      soundcloud: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=60",
+      vimeo: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=60",
+      twitch: "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=800&auto=format&fit=crop&q=60",
+      tiktok: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=800&auto=format&fit=crop&q=60",
+      instagram: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&auto=format&fit=crop&q=60",
+      reddit: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=60",
+      facebook: "https://images.unsplash.com/photo-1506157786151-b8491531f063?w=800&auto=format&fit=crop&q=60",
+      twitter: "https://images.unsplash.com/photo-1504639725590-34d0984388bd?w=800&auto=format&fit=crop&q=60",
+      pinterest: "https://images.unsplash.com/photo-1522542550221-31fd19575a2d?w=800&auto=format&fit=crop&q=60",
+      generic: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=800&auto=format&fit=crop&q=60",
+    };
+    return fallbacks[platform] || fallbacks.generic;
+  }
+
+  const formats = generateFormats(platform);
+
+  const tags: Record<PlatformId, string[]> = {
+    youtube: ["tutorial", "webdev", "javascript", "react", "programming"],
+    tiktok: ["coding", "programming", "shorts", "tips", "tech"],
+    instagram: ["setup", "workspace", "coding", "developer", "tech"],
+    reddit: ["discussion", "opinion", "showcase", "question", "guide"],
+    soundcloud: ["lofi", "chill", "study", "music", "beats"],
+    vimeo: ["cinematic", "art", "creative", "short-film", "animation"],
+    twitch: ["live", "streaming", "coding", "gaming", "tech"],
+    facebook: ["viral", "tips", "howto", "tech", "lifehack"],
+    twitter: ["hot-take", "dev", "tech", "thread", "opinion"],
+    pinterest: ["design", "ui", "ux", "resources", "tools"],
+    generic: ["media", "video", "audio", "download", "stream"],
+  };
+
+  const description = isPlaylist
+    ? `Full playlist "${title}" by ${author} — ${playlistCount} tracks. Total duration: ${Math.floor(duration / 60)} min.`
+    : `This ${platform} content titled "${title}" by ${author} has been analyzed and is ready for download. The media has ${formats.length} quality options available. Duration: ${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, "0")}.`;
+
+  return {
+    id,
+    url,
+    platform,
+    title: displayTitle,
+    thumbnail: thumbnailFor(id, platform, isPlaylist),
+    author,
+    authorAvatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(author)}`,
+    durationSeconds: duration,
+    durationLabel: `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, "0")}`,
+    uploadDate,
+    views,
+    likes,
+    description,
+    tags: tags[platform] || ["media", "download"],
+    isLive: false,
+    chapters: [
+      { title: "Introduction", start: 0, end: Math.floor(duration * 0.15) },
+      { title: "Main Content", start: Math.floor(duration * 0.15), end: Math.floor(duration * 0.85) },
+      { title: "Conclusion", start: Math.floor(duration * 0.85), end: duration },
+    ],
+    formats,
+    recommendedFormatId: "best_mp4_1080p",
+  ...(isPlaylist && {
+    playlistItems: trackNames.map((trackName, i) => {
+      const mins = Math.floor(Math.random() * 4) + 2;
+      const secs = String(Math.floor(Math.random() * 60)).padStart(2, "0");
+      return {
+        id: `${id}_p${i + 1}`,
+        title: trackName,
+        durationLabel: `${mins}:${secs}`,
+        sizeLabel: `${(Math.floor(Math.random() * 80) + 15)}.${Math.floor(Math.random() * 9)} MB`,
+      };
+    }),
+  }),
+  };
+}
+
+interface ActiveJob {
+  id: string;
+  url: string;
+  platform: string;
+  title: string;
+  thumbnail: string;
+  formatId: string;
+  quality: string;
+  state: DownloadState;
+  progress: number;
+  speedMbps: number;
+  etaSeconds: number;
+  fileSizeLabel: string;
+  error?: string;
+  downloadUrl?: string;
+  createdAt: number;
+  contentData?: Buffer;
+  fileName?: string;
+}
+
+const activeJobsStore = new Map<string, ActiveJob>();
+
+setInterval(() => {
+  const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+  for (const [id, job] of activeJobsStore.entries()) {
+    if (job.createdAt < tenMinutesAgo) activeJobsStore.delete(id);
+  }
+}, 10 * 60 * 1000);
+
+app.get("/api/health", (_req, res) => {
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    queueSize: activeJobsStore.size,
+    cacheSize: 0,
+    time: new Date().toISOString(),
+  });
 });
 
-// URL Intelligence Analysis Endpoint
 app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
-  const { url } = req.body;
-
-  if (!url || typeof url !== "string") {
-    return res.status(400).json({ error: "A valid URL string is required." });
-  }
-
-  if (isSsrfBlocklisted(url)) {
-    return res.status(400).json({
-      error: "Access is denied: Invalid, local, or blocklisted network address specified.",
-    });
-  }
-
-  const platform = extractPlatform(url);
-
   try {
-    // We use Gemini API (gemini-3.5-flash) to parsed and intelligence analyzed URLs dynamically
-    // It predicts content-type, generates formatting ladder, adds related chapters and playlists
-    const prompt = `
-      Analyze this ${platform} URL: "${url}".
-      Please output a structured JSON response matching the following TypeScript schema for MediaMetadata.
-      
-      Generate highly realistic and authentic estimates of download metadata. Do not return empty fields.
-      
-      If the URL contains playlist / compilation info (e.g. "list=", "playlist", "album", "set", "compilation") or if it's a popular media file, generate a highly realistic set of 4 to 7 tracks in a "playlistItems" array to enable batch downloading options.
-      
-      Structure:
-      {
-        "id": "unique_string_id",
-        "url": "${url}",
-        "platform": "${platform}",
-        "title": "Clean parsed title based on the URL tokens",
-        "thumbnail": "High-quality representative image URL (or placehold image)",
-        "author": "Creator / Channel name",
-        "authorAvatar": "Avatar URL",
-        "durationSeconds": 312,
-        "durationLabel": "5:12",
-        "uploadDate": "2026-06-15T12:00:00Z",
-        "views": 450200,
-        "likes": 28400,
-        "description": "Exquisite summary description of the video or media asset.",
-        "tags": ["tag1", "tag2"],
-        "isLive": false,
-        "viewerCount": 0,
-        "chapters": [
-          {"title": "Introduction", "start": 0, "end": 45},
-          {"title": "Deep Dive Segment", "start": 45, "end": 200},
-          {"title": "Summary / Outro", "start": 200, "end": 312}
-        ],
-        "formats": [
-          {
-            "id": "best_mp4_1080p",
-            "ext": "mp4",
-            "resolution": "1080p",
-            "qualityLabel": "1080p (60fps) MP4",
-            "fps": 60,
-            "sizeBytes": 78643200,
-            "sizeLabel": "75.0 MB",
-            "hasVideo": true,
-            "hasAudio": true,
-            "container": "mp4"
-          },
-          {
-            "id": "medium_mp4_720p",
-            "ext": "mp4",
-            "resolution": "720p",
-            "qualityLabel": "720p (30fps) MP4",
-            "fps": 30,
-            "sizeBytes": 41943040,
-            "sizeLabel": "40.0 MB",
-            "hasVideo": true,
-            "hasAudio": true,
-            "container": "mp4"
-          },
-          {
-            "id": "highest_audio_mp3",
-            "ext": "mp3",
-            "resolution": "Audio Only",
-            "qualityLabel": "Audio Only - High (320kbps MP3)",
-            "sizeBytes": 12582912,
-            "sizeLabel": "12.0 MB",
-            "hasVideo": false,
-            "hasAudio": true,
-            "bitrate": 320,
-            "container": "mp3"
-          }
-        ],
-        "recommendedFormatId": "best_mp4_1080p",
-        "playlistItems": [
-          {"id": "play_1", "title": "First Song Name", "durationLabel": "4:05", "thumbnail": "https://images.unsplash.com/..."},
-          {"id": "play_2", "title": "Second Song Name", "durationLabel": "3:40", "thumbnail": "https://images.unsplash.com/..."}
-        ]
-      }
-    `;
+    const { url } = req.body;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            id: { type: Type.STRING },
-            url: { type: Type.STRING },
-            platform: { type: Type.STRING },
-            title: { type: Type.STRING },
-            thumbnail: { type: Type.STRING },
-            author: { type: Type.STRING },
-            authorAvatar: { type: Type.STRING },
-            durationSeconds: { type: Type.INTEGER },
-            durationLabel: { type: Type.STRING },
-            uploadDate: { type: Type.STRING },
-            views: { type: Type.INTEGER },
-            likes: { type: Type.INTEGER },
-            description: { type: Type.STRING },
-            tags: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-            },
-            isLive: { type: Type.BOOLEAN },
-            viewerCount: { type: Type.INTEGER },
-            chapters: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  start: { type: Type.INTEGER },
-                  end: { type: Type.INTEGER },
-                },
-                required: ["title", "start", "end"],
-              },
-            },
-            formats: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  ext: { type: Type.STRING },
-                  resolution: { type: Type.STRING },
-                  qualityLabel: { type: Type.STRING },
-                  fps: { type: Type.INTEGER },
-                  sizeBytes: { type: Type.INTEGER },
-                  sizeLabel: { type: Type.STRING },
-                  hasVideo: { type: Type.BOOLEAN },
-                  hasAudio: { type: Type.BOOLEAN },
-                  bitrate: { type: Type.INTEGER },
-                  container: { type: Type.STRING },
-                },
-                required: ["id", "ext", "resolution", "qualityLabel", "hasVideo", "hasAudio", "container"],
-              },
-            },
-            recommendedFormatId: { type: Type.STRING },
-            playlistItems: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  title: { type: Type.STRING },
-                  durationLabel: { type: Type.STRING },
-                  thumbnail: { type: Type.STRING },
-                  author: { type: Type.STRING },
-                  sizeLabel: { type: Type.STRING },
-                },
-                required: ["id", "title", "durationLabel"],
-              },
-            },
-          },
-          required: ["id", "url", "platform", "title", "thumbnail", "author", "durationSeconds", "durationLabel", "formats"],
-        },
-      },
-    });
-
-    const parsedData = JSON.parse(response.text?.trim() || "{}") as MediaMetadata;
-    
-    // Fallback images if not set properly or returning generic URL
-    if (!parsedData.thumbnail || parsedData.thumbnail.includes("placeholder")) {
-      parsedData.thumbnail = `https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=800&auto=format&fit=crop&q=60`;
-    }
-    if (!parsedData.authorAvatar) {
-      parsedData.authorAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(parsedData.author)}`;
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ error: "A valid URL string is required." });
     }
 
-    res.json(parsedData);
-  } catch (error: any) {
-    console.error("URL Analysis error:", error);
+    if (isSsrfBlocklisted(url)) {
+      return res.status(400).json({
+        error: "Access is denied: Invalid, local, or blocklisted network address specified.",
+      });
+    }
+
+    const platform = extractPlatform(url);
+    const metadata = generateMockMetadata(url, platform);
+    res.json(metadata);
+  } catch (err) {
+    console.error("URL analysis error:", err);
     res.status(500).json({
-      error: "Failed to fetch metadata. Private, age-restricted, or invalid resource link.",
+      error: "Could not analyze this URL. The link may be private, age-restricted, or unsupported.",
     });
   }
 });
 
-// Search Layer Endpoint (Part 4.3)
 app.post("/api/search", searchLimiter, async (req, res) => {
-  const { query, platform } = req.body;
+  try {
+    const { query, platform } = req.body;
 
-  if (!query || typeof query !== "string") {
-    return res.status(400).json({ error: "Search query is required." });
+    if (!query || typeof query !== "string") {
+      return res.status(400).json({ error: "Search query is required." });
+    }
+
+    const safeQuery = query.slice(0, 200);
+  const platforms = ["youtube", "soundcloud", "vimeo", "twitch", "tiktok"];
+  const results: SearchResultItem[] = [];
+
+  const thumbnails = [
+    "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=480&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=480&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=480&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=480&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1506157786151-b8491531f063?w=480&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=480&fit=crop&q=80",
+  ];
+
+  const numResults = 6;
+  for (let i = 0; i < numResults; i++) {
+    const p = platform && platform !== "all" ? platform : platforms[i % platforms.length];
+    const duration = Math.floor(Math.random() * 900) + 60;
+    results.push({
+      id: `result_${i}_${Date.now()}`,
+      url: p === "youtube"
+        ? `https://www.youtube.com/watch?v=${Math.random().toString(36).substring(2, 13)}`
+        : p === "soundcloud"
+          ? `https://soundcloud.com/${safeQuery.toLowerCase().replace(/\s+/g, "-")}/track-${i}`
+          : `https://www.${p}.com/watch/${Math.random().toString(36).substring(2, 10)}`,
+      platform: p,
+      title: `${safeQuery} - ${["Tutorial", "Review", "Analysis", "Deep Dive", "Overview", "Guide"][i]}`,
+      thumbnail: thumbnails[i % thumbnails.length],
+      author: [`Creator${i + 1}`, `Channel${i + 1}`, `${p}Star${i}`][i % 3],
+      durationLabel: `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, "0")}`,
+      durationSeconds: duration,
+      viewsLabel: `${(Math.floor(Math.random() * 500) + 1)}K views`,
+      uploadDateLabel: `${Math.floor(Math.random() * 30) + 1} ${["days", "weeks", "months"][i % 3]} ago`,
+    });
   }
 
-  try {
-    const prompt = `
-      The user is searching for "${query}" on NexLoad (media downloader).
-      Please generate 6 highly relevant search results for the platform: "${platform || "all"}".
-      
-      Generate highly realistic metadata.
-      Structure the response as a JSON array matching the TypeScript SearchResultItem[] array:
-      [
-        {
-          "id": "result_id_1",
-          "url": "https://www.youtube.com/watch?v=unique_id_1",
-          "platform": "youtube",
-          "title": "Clean highly matching title",
-          "thumbnail": "High-quality representative thumbnail Unsplash URL (use Unsplash search queries formatted like https://images.unsplash.com/photo-XXX?w=480&fit=crop...)",
-          "author": "Creator Channel Name",
-          "durationLabel": "4:20",
-          "durationSeconds": 260,
-          "viewsLabel": "1.2M views",
-          "uploadDateLabel": "2 months ago"
-        }
-      ]
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              url: { type: Type.STRING },
-              platform: { type: Type.STRING },
-              title: { type: Type.STRING },
-              thumbnail: { type: Type.STRING },
-              author: { type: Type.STRING },
-              durationLabel: { type: Type.STRING },
-              durationSeconds: { type: Type.INTEGER },
-              viewsLabel: { type: Type.STRING },
-              uploadDateLabel: { type: Type.STRING },
-            },
-            required: ["id", "url", "platform", "title", "thumbnail", "author", "durationLabel", "durationSeconds"],
-          },
-        },
-      },
-    });
-
-    const parsedResults = JSON.parse(response.text?.trim() || "[]") as SearchResultItem[];
-    
-    // Guarantee fallback thumbnails look stunning
-    const fallbackPhotos = [
-      "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=480&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=480&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=480&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=480&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1506157786151-b8491531f063?w=480&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=480&fit=crop&q=80"
-    ];
-
-    parsedResults.forEach((item, index) => {
-      if (!item.thumbnail || !item.thumbnail.startsWith("http")) {
-        item.thumbnail = fallbackPhotos[index % fallbackPhotos.length];
-      }
-    });
-
-    res.json(parsedResults);
-  } catch (error) {
-    console.error("Search API failure:", error);
-    res.status(500).json({ error: "Failed to dispatch search queries. Service temporarily busy." });
+  res.json(results);
+  } catch (err) {
+    console.error("Search error:", err);
+    res.status(500).json({ error: "Search failed. Please try again." });
   }
 });
 
-// Trigger download job (Starts media workflow queue)
 app.post("/api/jobs/create", downloadLimiter, (req, res) => {
   const { url, title, thumbnail, platform, formatId, quality, sizeLabel, ext } = req.body;
 
@@ -482,30 +510,15 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
 
   activeJobsStore.set(jobId, activeJob);
 
-  // Background state machine runner using interval (Part 6)
-  let statusCycle = [
-    { state: DownloadState.FETCHING_METADATA, text: "Checking secure endpoint link..." },
-    { state: DownloadState.ANALYZING, text: "Running content quality negotiation..." },
-    { state: DownloadState.PROCESSING, text: "FFmpeg pipeline processing video+audio stream muxing..." },
-    { state: DownloadState.DOWNLOADING, text: "Downloading stream blocks..." },
-  ];
-
-  let currentCycleIdx = 0;
-  
   const simulationInterval = setInterval(() => {
     const job = activeJobsStore.get(jobId);
-    if (!job) {
-      clearInterval(simulationInterval);
-      return;
-    }
-
+    if (!job) { clearInterval(simulationInterval); return; }
     if (job.state === DownloadState.COMPLETED || job.state === DownloadState.FAILED) {
       clearInterval(simulationInterval);
       return;
     }
 
     if (job.progress < 100) {
-      // Advance work cycle
       if (job.progress < 15) {
         job.state = DownloadState.FETCHING_METADATA;
         job.progress += 3;
@@ -528,10 +541,18 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
         job.speedMbps = 0;
         job.etaSeconds = 0;
         job.downloadUrl = `/api/download/${jobId}`;
-        
-        // Generate actual mock downloadable content so the file downloads works
-        // We write out a simple media file for client to trigger save
-        const dummyText = `NexLoad Media Downloader Output File\n==================================\nTitle: ${job.title}\nPlatform: ${job.platform}\nFormat: ${job.formatId}\nUrl: ${job.url}\nDownloaded at: ${new Date().toISOString()}`;
+        const dummyText = [
+          `NexLoad Media Download`,
+          `======================`,
+          `Title: ${job.title}`,
+          `Platform: ${job.platform}`,
+          `Format: ${job.formatId}`,
+          `URL: ${job.url}`,
+          `Downloaded: ${new Date().toISOString()}`,
+          ``,
+          `This is a simulated download file from NexLoad.`,
+          `In production, this would contain the actual media stream.`,
+        ].join("\n");
         job.contentData = Buffer.from(dummyText, "utf-8");
       }
 
@@ -542,34 +563,68 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
   res.status(202).json({ jobId, message: "Download job queued successfully." });
 });
 
-// Job checking endpoint
 app.get("/api/jobs/:jobId", (req, res) => {
   const { jobId } = req.params;
   const job = activeJobsStore.get(jobId);
-  
+
   if (!job) {
     return res.status(404).json({ error: "Job ID not found or expired from history." });
   }
 
   res.json({
-    id: job.id,
-    url: job.url,
-    title: job.title,
-    thumbnail: job.thumbnail,
-    platform: job.platform,
-    formatId: job.formatId,
-    quality: job.quality,
-    state: job.state,
-    progress: job.progress,
-    speedMbps: job.speedMbps,
-    etaSeconds: job.etaSeconds,
-    fileSizeLabel: job.fileSizeLabel,
-    error: job.error,
-    downloadUrl: job.downloadUrl,
+    id: job.id, url: job.url, title: job.title, thumbnail: job.thumbnail,
+    platform: job.platform, formatId: job.formatId, quality: job.quality,
+    state: job.state, progress: job.progress, speedMbps: job.speedMbps,
+    etaSeconds: job.etaSeconds, fileSizeLabel: job.fileSizeLabel,
+    error: job.error, downloadUrl: job.downloadUrl,
   });
 });
 
-// Serve download payload to the browser (triggers browser native file save dialog)
+app.get("/favicon.ico", (_req, res) => {
+  res.status(204).end();
+});
+
+app.use((err: any, _req: any, res: any, _next: any) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "Internal server error. Please try again." });
+});
+
+app.get("/api/jobs/:jobId/progress", (req, res) => {
+  const { jobId } = req.params;
+
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+
+  const sendProgress = () => {
+    const job = activeJobsStore.get(jobId);
+    if (!job) {
+      res.write(`data: ${JSON.stringify({ type: "error", code: "JOB_NOT_FOUND", message: "Job not found" })}\n\n`);
+      res.end();
+      return;
+    }
+
+    res.write(`data: ${JSON.stringify({ type: "progress", percent: job.progress, speed: `${job.speedMbps}mb/s`, eta: job.etaSeconds })}\n\n`);
+
+    if (job.state === DownloadState.COMPLETED) {
+      res.write(`data: ${JSON.stringify({ type: "complete", downloadUrl: `/api/download/${jobId}` })}\n\n`);
+      res.end();
+    } else if (job.state === DownloadState.FAILED) {
+      res.write(`data: ${JSON.stringify({ type: "error", code: "PROCESSING_FAILED", message: job.error || "Processing failed" })}\n\n`);
+      res.end();
+    }
+  };
+
+  const interval = setInterval(sendProgress, 500);
+  sendProgress();
+
+  req.on("close", () => {
+    clearInterval(interval);
+  });
+});
+
 app.get("/api/download/:jobId", (req, res) => {
   const { jobId } = req.params;
   const job = activeJobsStore.get(jobId);
@@ -583,7 +638,21 @@ app.get("/api/download/:jobId", (req, res) => {
   res.send(job.contentData);
 });
 
-// Vite middleware setup or static distribution serving
+app.get("/api/platforms", (_req, res) => {
+  res.json([
+    { name: "YouTube", capabilities: ["video", "audio", "playlist", "live"] },
+    { name: "TikTok", capabilities: ["video", "audio"] },
+    { name: "Instagram", capabilities: ["video", "audio", "image"] },
+    { name: "SoundCloud", capabilities: ["audio", "playlist"] },
+    { name: "Twitch", capabilities: ["video", "live"] },
+    { name: "Twitter/X", capabilities: ["video", "audio"] },
+    { name: "Reddit", capabilities: ["video", "audio"] },
+    { name: "Pinterest", capabilities: ["image", "video"] },
+    { name: "Vimeo", capabilities: ["video", "audio"] },
+    { name: "Facebook", capabilities: ["video", "audio"] },
+  ]);
+});
+
 async function bootstrap() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -594,7 +663,7 @@ async function bootstrap() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
@@ -605,5 +674,5 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
-  console.error("Vite server failed to start:", err);
+  console.error("Server failed to start:", err);
 });

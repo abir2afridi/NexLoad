@@ -34,12 +34,16 @@ export const MetadataPreview: React.FC = () => {
   const [selectedChapters, setSelectedChapters] = useState<number[]>([]);
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const hasSetDefaultFormat = React.useRef(false);
 
   if (!analyzedMetadata) return null;
 
-  if (!selectedFormatId && analyzedMetadata.formats.length > 0) {
-    setSelectedFormatId(analyzedMetadata.recommendedFormatId || analyzedMetadata.formats[0].id);
-  }
+  useEffect(() => {
+    if (!hasSetDefaultFormat.current && analyzedMetadata.formats.length > 0) {
+      setSelectedFormatId(analyzedMetadata.recommendedFormatId || analyzedMetadata.formats[0].id);
+      hasSetDefaultFormat.current = true;
+    }
+  }, [analyzedMetadata]);
 
   useEffect(() => {
     if (analyzedMetadata.playlistItems) {
@@ -182,50 +186,50 @@ export const MetadataPreview: React.FC = () => {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 30 }}
       transition={{ type: "spring", stiffness: 220, damping: 25 }}
-      className="w-full border border-white/5 p-6 md:p-8 relative overflow-hidden"
+      className="w-full card-brutalist bg-cream p-6 md:p-8 relative overflow-hidden"
       id="metadata-preview-panel"
     >
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
         {/* Left: Thumbnail */}
         <div className="lg:col-span-5 flex flex-col gap-4">
-          <div className="relative aspect-video overflow-hidden border border-white/5 bg-white/[0.02]">
+          <div className="relative aspect-video overflow-hidden border border-ink/10 bg-ink/[0.02]">
             <img
               src={analyzedMetadata.thumbnail}
               alt={analyzedMetadata.title}
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
             />
-            <div className="absolute top-3 left-3 bg-black/80 px-3 py-1 border border-white/10 text-[10px] font-mono text-white/60">
+            <div className="absolute top-3 left-3 bg-cream-dark px-3 py-1 border border-ink/10 text-[10px] font-mono text-ink-light">
               {analyzedMetadata.formats[0]?.resolution || "HD"}
             </div>
-            <div className="absolute bottom-3 right-3 bg-black/80 px-2.5 py-1 border border-white/10 text-[10px] font-mono text-white/60">
+            <div className="absolute bottom-3 right-3 bg-cream-dark px-2.5 py-1 border border-ink/10 text-[10px] font-mono text-ink-light">
               {analyzedMetadata.durationLabel}
             </div>
             {analyzedMetadata.isLive && (
-              <div className="absolute top-3 right-3 bg-red-600/90 text-white text-[10px] px-2.5 py-1 border border-red-500 font-mono tracking-wider animate-pulse">
+              <div className="absolute top-3 right-3 bg-red-500/90 text-white text-[10px] px-2.5 py-1 border border-red-500 font-mono tracking-wider animate-pulse">
                 LIVE
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-3 p-3 border border-white/5">
+          <div className="card-brutalist-static p-3 flex items-center gap-3">
             {analyzedMetadata.authorAvatar ? (
               <img
                 src={analyzedMetadata.authorAvatar}
                 alt={analyzedMetadata.author}
-                className="w-10 h-10 border border-white/10"
+                className="w-10 h-10 border border-ink/10"
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="w-10 h-10 bg-[#ff5b00]/20 flex items-center justify-center font-bold text-[#ff5b00] border border-[#ff5b00]/40">
+              <div className="w-10 h-10 bg-amber/20 flex items-center justify-center font-bold text-amber border border-amber/40">
                 {analyzedMetadata.author[0]}
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-display tracking-wider text-white/70 uppercase truncate">
+              <h4 className="text-sm text-ink/70 truncate">
                 {analyzedMetadata.author}
               </h4>
-              <p className="text-[10px] font-mono text-white/30 capitalize">
+              <p className="text-[10px] font-mono text-ink-muted capitalize">
                 Verified {analyzedMetadata.platform} Creator
               </p>
             </div>
@@ -236,15 +240,15 @@ export const MetadataPreview: React.FC = () => {
         <div className="lg:col-span-7 flex flex-col justify-between gap-6">
           <div className="flex flex-col gap-4">
             <div>
-              <span className="text-[9px] font-mono tracking-[0.25em] text-[#ff5b00] uppercase mb-1 block">
+              <span className="text-[9px] tracking-[0.25em] text-amber uppercase mb-1 block">
                 {analyzedMetadata.platform} Resource
               </span>
-              <h3 className="text-xl md:text-2xl font-display font-bold tracking-tight text-white/80 uppercase leading-tight">
+              <h3 className="text-xl md:text-2xl font-bold text-ink leading-tight">
                 {analyzedMetadata.title}
               </h3>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-ink/10">
               {[
                 { icon: Eye, label: "Views", value: analyzedMetadata.views?.toLocaleString() || "N/A" },
                 { icon: ThumbsUp, label: "Likes", value: analyzedMetadata.likes?.toLocaleString() || "N/A" },
@@ -261,26 +265,26 @@ export const MetadataPreview: React.FC = () => {
                 },
                 { icon: Clock, label: "Duration", value: analyzedMetadata.durationLabel },
               ].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="bg-black p-4 flex items-center gap-3 text-white/60">
-                  <Icon className="w-4 h-4 text-[#ff5b00] shrink-0" />
+                <div key={label} className="bg-cream p-4 flex items-center gap-3 text-ink-light">
+                  <Icon className="w-4 h-4 text-amber shrink-0" />
                   <div className="text-[11px] font-mono">
-                    <div className="text-[8px] text-white/30 uppercase tracking-wider font-display">
+                    <div className="text-[8px] text-ink-muted uppercase tracking-wider">
                       {label}
                     </div>
-                    <div className="font-bold text-white/70">{value}</div>
+                    <div className="font-bold text-ink/80">{value}</div>
                   </div>
                 </div>
               ))}
             </div>
 
             {analyzedMetadata.description && (
-              <div className="border border-white/5 p-3 text-xs">
-                <p className={`text-white/40 font-body leading-relaxed ${isDescExpanded ? "" : "line-clamp-2"}`}>
+              <div className="card-brutalist-static p-3 text-xs">
+                <p className={`text-ink-light font-sans leading-relaxed ${isDescExpanded ? "" : "line-clamp-2"}`}>
                   {analyzedMetadata.description}
                 </p>
                 <button
                   onClick={() => setIsDescExpanded(!isDescExpanded)}
-                  className="mt-1 flex items-center gap-1.5 focus:outline-none font-mono text-[9px] text-[#ff5b00] hover:text-[#ff8c00] transition-colors uppercase tracking-wider"
+                  className="mt-1 flex items-center gap-1.5 focus:outline-none font-mono text-[9px] text-amber hover:text-ink transition-colors uppercase tracking-wider "
                 >
                   {isDescExpanded ? (
                     <>
@@ -297,9 +301,7 @@ export const MetadataPreview: React.FC = () => {
 
             {analyzedMetadata.chapters && analyzedMetadata.chapters.length > 0 && (
               <div className="flex flex-col gap-2">
-                <span className="text-[9px] uppercase font-mono tracking-[0.2em] text-white/30 block">
-                  Interactive Chapters (Optional)
-                </span>
+                <span className="label-meta">Interactive Chapters (Optional)</span>
                 <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-2 custom-scrollbar">
                   {analyzedMetadata.chapters.map((chap, idx) => {
                     const isSelected = selectedChapters.includes(idx);
@@ -307,10 +309,10 @@ export const MetadataPreview: React.FC = () => {
                       <button
                         key={idx}
                         onClick={() => toggleChapter(idx)}
-                        className={`text-[10px] px-2.5 py-1 border transition-all cursor-pointer uppercase tracking-wider font-display ${
+                        className={`text-[10px] px-2.5 py-1 border transition-all cursor-pointer uppercase tracking-wider font-mono  ${
                           isSelected
-                            ? "bg-[#ff5b00]/10 text-[#ff5b00] border-[#ff5b00]/50"
-                            : "bg-white/[0.02] text-white/30 border-white/10 hover:border-white/20"
+                            ? "bg-amber/10 text-amber border-amber/50"
+                            : "bg-ink/[0.02] text-ink-muted border-ink/10 hover:border-ink/20"
                         }`}
                       >
                         {chap.title}
@@ -322,13 +324,13 @@ export const MetadataPreview: React.FC = () => {
             )}
 
             {analyzedMetadata.playlistItems && analyzedMetadata.playlistItems.length > 0 && (
-              <div className="border border-white/5 p-4 flex flex-col gap-3">
+              <div className="card-brutalist-static p-4 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h5 className="text-white/70 font-display text-xs tracking-wider uppercase">
+                    <h5 className="text-ink/70 text-xs">
                       Batch Playlist Intelligence
                     </h5>
-                    <span className="text-[9px] font-mono text-white/30">
+                    <span className="text-[9px] font-mono text-ink-muted">
                       {selectedPlaylistIds.length} of {analyzedMetadata.playlistItems.length} tracks chosen
                     </span>
                   </div>
@@ -336,15 +338,15 @@ export const MetadataPreview: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setSelectedPlaylistIds(analyzedMetadata.playlistItems!.map((item) => item.id))}
-                      className="text-[#ff5b00] hover:text-[#ff8c00] transition-colors cursor-pointer"
+                      className="text-amber hover:text-ink transition-colors cursor-pointer "
                     >
                       All
                     </button>
-                    <span className="text-white/10">|</span>
+                    <span className="text-ink/20">|</span>
                     <button
                       type="button"
                       onClick={() => setSelectedPlaylistIds([])}
-                      className="text-white/30 hover:text-white/60 transition-colors cursor-pointer"
+                      className="text-ink-muted hover:text-ink-light transition-colors cursor-pointer "
                     >
                       None
                     </button>
@@ -364,8 +366,8 @@ export const MetadataPreview: React.FC = () => {
                         }}
                         className={`flex items-center justify-between p-2.5 border transition-all cursor-pointer ${
                           isChecked
-                            ? "bg-[#ff5b00]/5 border-[#ff5b00]/30"
-                            : "bg-white/[0.01] border-white/5 hover:border-white/10"
+                            ? "bg-amber/5 border-amber/30"
+                            : "bg-ink/[0.01] border-ink/10 hover:border-ink/20"
                         }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -373,16 +375,16 @@ export const MetadataPreview: React.FC = () => {
                             type="checkbox"
                             checked={isChecked}
                             onChange={() => {}}
-                            className="w-3 h-3 accent-[#ff5b00] cursor-pointer"
+                            className="w-3 h-3 accent-amber cursor-pointer"
                           />
-                          <span className="text-[10px] font-mono text-white/30 w-5 text-right">
+                          <span className="text-[10px] font-mono text-ink-muted w-5 text-right">
                             {(idx + 1).toString().padStart(2, "0")}
                           </span>
-                          <span className="text-xs font-body text-white/60 truncate pr-4">
+                          <span className="text-xs font-sans text-ink-light truncate pr-4">
                             {item.title}
                           </span>
                         </div>
-                        <span className="text-[9px] font-mono text-white/30 shrink-0">
+                        <span className="text-[9px] font-mono text-ink-muted shrink-0">
                           {item.durationLabel}
                         </span>
                       </div>
@@ -394,36 +396,36 @@ export const MetadataPreview: React.FC = () => {
 
             <div className="flex flex-col gap-3">
               <span className="label-meta">Select Output Quality</span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-white/5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-ink/10">
                 {analyzedMetadata.formats.map((form) => {
                   const isActive = selectedFormatId === form.id;
                   return (
                     <button
                       key={form.id}
                       onClick={() => setSelectedFormatId(form.id)}
-                      className={`flex flex-col items-start gap-1 p-3.5 border-0 text-left transition-all cursor-pointer relative ${
+                      className={`flex flex-col items-start gap-1 p-3.5 text-left transition-all cursor-pointer relative  ${
                         isActive
-                          ? "bg-[#ff5b00]/10 text-white ring-1 ring-[#ff5b00]"
-                          : "bg-black text-white/40 hover:bg-white/[0.02]"
+                          ? "bg-amber/10 text-ink ring-1 ring-amber"
+                          : "bg-cream text-ink-light hover:bg-ink/[0.02]"
                       }`}
                     >
                       {isActive && (
-                        <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#ff5b00] animate-pulse" />
+                        <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-amber animate-pulse" />
                       )}
                       <div className="flex items-center gap-1.5 w-full justify-between">
-                        <span className="text-xs font-display tracking-wider uppercase text-white/70">
+                        <span className="text-xs text-ink/70">
                           {form.resolution}
                         </span>
                         {!isActive && (form.hasVideo ? (
-                          <Video className="w-3 h-3 text-white/20" />
+                          <Video className="w-3 h-3 text-ink/20" />
                         ) : (
-                          <Music className="w-3 h-3 text-white/20" />
+                          <Music className="w-3 h-3 text-ink/20" />
                         ))}
                       </div>
-                      <span className="text-[9px] font-mono text-white/30 mt-0.5 truncate w-full">
+                      <span className="text-[9px] font-mono text-ink-muted mt-0.5 truncate w-full">
                         {form.qualityLabel}
                       </span>
-                      <span className="text-[9px] font-mono text-white/20 mt-0.5">
+                      <span className="text-[9px] font-mono text-ink-muted mt-0.5">
                         {form.sizeLabel || "N/A"} &bull; {form.ext.toUpperCase()}
                       </span>
                     </button>
@@ -436,18 +438,18 @@ export const MetadataPreview: React.FC = () => {
           <div className="flex items-center gap-4 mt-4">
             <button
               onClick={() => setAnalyzedMetadata(null)}
-              className="px-5 py-3 font-mono text-xs border border-white/10 text-white/40 hover:text-white/60 hover:bg-white/[0.02] transition-all"
+              className="px-5 py-3 font-mono text-xs border border-ink/10 text-ink-muted hover:text-ink-light hover:bg-ink/[0.02] transition-all "
             >
               Cancel
             </button>
             <button
               onClick={handleDownloadTrigger}
               disabled={isSubmitting || (!!analyzedMetadata.playlistItems && analyzedMetadata.playlistItems.length > 0 && selectedPlaylistIds.length === 0)}
-              className="flex-1 bg-[#ff5b00] hover:bg-[#e65200] disabled:bg-white/5 disabled:text-white/20 disabled:cursor-not-allowed text-white text-sm font-display tracking-[0.1em] uppercase py-3 px-6 flex items-center justify-center gap-2 transition-all"
+              className="flex-1 bg-amber hover:bg-ink text-white text-sm tracking-[0.1em] uppercase py-3 px-6 flex items-center justify-center gap-2 transition-all disabled:bg-ink/10 disabled:text-ink-muted disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white animate-spin" />
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent animate-spin" />
                   Generating pipeline...
                 </>
               ) : (

@@ -1,0 +1,23 @@
+services:
+  nexload-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    restart: unless-stopped
+    tmpfs:
+      - /tmp/nexload
+
+  nexload-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "80:80"
+    depends_on:
+      - nexload-server
+    restart: unless-stopped
