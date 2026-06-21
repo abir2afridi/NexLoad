@@ -2,7 +2,7 @@
 
 **"Download anything. Instantly."**
 
-A production-grade media downloader web application — minimal, fast, zero-friction. No tracking, no ads, no database, no AI.
+A production-grade media & image downloader web application — minimal, fast, zero-friction. No tracking, no ads, no database, no AI.
 
 ---
 
@@ -12,7 +12,7 @@ A production-grade media downloader web application — minimal, fast, zero-fric
 # Install dependencies
 npm install
 
-# Install yt-dlp (required for downloads)
+# Install yt-dlp (required for video downloads)
 pip install yt-dlp
 
 # Start dev server
@@ -23,6 +23,7 @@ npm run dev
 
 ## Features
 
+### Video Mode
 - **Multi-platform** — YouTube, TikTok, Instagram, Reddit, SoundCloud, Vimeo, Twitch, Twitter/X, Pinterest, direct URLs (MP4, etc.)
 - **Playlist support** — Batch download entire playlists with track selection
 - **Real downloads** — Powered by yt-dlp with video+audio merge
@@ -31,10 +32,21 @@ npm run dev
 - **OG metadata fallback** — Extracts title & thumbnail from page HTML when yt-dlp fails (TikTok, Instagram, etc.)
 - **Direct video download** — Bypasses yt-dlp for platforms that expose direct video URLs (Pinterest, etc.)
 - **Search & Browse** — In-app trending and search across platforms
+
+### Image Mode
+- **Image grabber** — Paste any direct image URL (JPG, PNG, WebP, GIF, BMP, AVIF, SVG, TIFF)
+- **Format conversion** — Convert between JPEG, PNG, WebP, AVIF, BMP on download
+- **Quality control** — Adjustable quality slider (10–100%) with presets (Max, High, Med, Low, Tiny)
+- **Image preview** — Instant preview with metadata (dimensions, format, file size)
+- **Clipboard paste** — One-click paste from clipboard
+- **Blob download** — Client-side blob download with auto-naming
+
+### Shared
 - **Download history** — Stored locally via IndexedDB (max 500 records)
 - **Dark/Light themes** — Multiple dark modes + light mode + system preference
 - **Accent colors** — 8 selectable accent colors
 - **Privacy-first** — Zero analytics, zero fingerprinting, zero tracking
+- **Responsive design** — Fully responsive across mobile, tablet, and desktop
 
 ## Tech Stack
 
@@ -46,7 +58,8 @@ npm run dev
 | Backend | Express 4, Node.js |
 | Security | Helmet.js, express-rate-limit |
 | Storage | IndexedDB via Dexie.js (browser), in-memory (server) |
-| Downloads | yt-dlp (spawned subprocess), direct HTTP fallback |
+| Video Downloads | yt-dlp (spawned subprocess), direct HTTP fallback |
+| Image Processing | Optional sharp module for format conversion |
 
 ## Project Structure
 
@@ -54,16 +67,19 @@ npm run dev
 NexLoad/
   server.ts              # Express backend (API + static serving)
   src/
-    App.tsx              # Main app with header queue dropdown
+    App.tsx              # Main app with header, queue dropdown, mode toggle
     types.ts             # TypeScript interfaces
     components/
+      ImageDownloader.tsx    # Image mode — URL input, preview, format/quality
       MetadataPreview.tsx    # Preview panel with format/playlist selection
       SearchAndBrowse.tsx    # Trending/search/history tabs
+      SupportedPlatforms.tsx # Platform icon grid
       SettingsModal.tsx      # App settings
+      AboutModal.tsx         # About & FAQ
       GhostLoader.tsx        # Animated hero loader
       BrandLogo.tsx          # Logo component
     stores/
-      useAppStore.ts         # Zustand store
+      useAppStore.ts         # Zustand store (appMode, jobs, settings)
     lib/
       db.ts                  # Dexie IndexedDB
   public/
@@ -75,12 +91,14 @@ NexLoad/
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/analyze-url` | Analyze a URL and return metadata |
+| POST | `/api/analyze-url` | Analyze a URL and return media metadata |
 | POST | `/api/search` | Search across platforms |
 | POST | `/api/jobs/create` | Create a download job |
 | GET | `/api/jobs/:id` | Get job status |
 | GET | `/api/download/:id` | Download the completed file |
 | GET | `/api/platforms` | List supported platforms |
+| POST | `/api/image/info` | Fetch image metadata (dimensions, type, size) |
+| GET | `/api/image/download` | Download/convert image with optional format & quality |
 
 ## Design
 
@@ -96,6 +114,7 @@ NexLoad/
 - Python 3.10+ (for yt-dlp)
 - yt-dlp (`pip install yt-dlp`)
 - ffmpeg (optional, required for >720p YouTube downloads)
+- sharp (optional, required for image format conversion)
 
 ## License
 
