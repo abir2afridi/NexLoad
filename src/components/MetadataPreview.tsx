@@ -38,7 +38,7 @@ export const MetadataPreview: React.FC = () => {
   // ── Show ALL formats; >720p ones get a warning icon in UI when ffmpeg missing ──
   const filteredFormats: MediaFormat[] = React.useMemo(() => {
     if (!analyzedMetadata) return [];
-    return analyzedMetadata.formats;
+    return analyzedMetadata.formats || [];
   }, [analyzedMetadata]);
 
   // ── Reset selected format whenever the analyzed media changes (new URL) ──
@@ -59,7 +59,7 @@ export const MetadataPreview: React.FC = () => {
     }
   }, [analyzedMetadata?.url]);
 
-  if (!analyzedMetadata) return null;
+  if (!analyzedMetadata || filteredFormats.length === 0) return null;
 
   const selectedFormat = filteredFormats.find((f) => f.id === selectedFormatId) ?? filteredFormats[0];
 
@@ -410,19 +410,15 @@ export const MetadataPreview: React.FC = () => {
               <span className="label-meta">Select Output Quality</span>
 
               {/* ffmpeg warning banner */}
-              {!analyzedMetadata.ffmpegAvailable && selectedFormat?.hasVideo && (() => {
-                const m = selectedFormat.resolution.match(/(\d+)p/);
-                const h = m ? parseInt(m[1]) : 0;
-                return h > 720;
-              })() && (
+              {!analyzedMetadata.ffmpegAvailable && selectedFormat?.hasVideo && (
                 <div className="flex items-start gap-3 p-3 border border-amber/40 bg-amber/5 text-xs">
                   <span className="text-amber font-bold shrink-0 mt-0.5">⚠</span>
                   <div className="flex flex-col gap-1">
                     <span className="text-ink/80 font-mono">
-                      <strong>ffmpeg required</strong> for {selectedFormat.resolution} downloads.
+                      <strong>ffmpeg not installed</strong> — max video quality is ~480p
                     </span>
                     <span className="text-ink-muted">
-                      Install ffmpeg to download 1080p and above. Without it, max quality is <strong>720p</strong>.
+                      YouTube 720p+ uses separate video+audio streams that require ffmpeg to merge.
                     </span>
                     <a
                       href="https://ffmpeg.org/download.html"
@@ -441,10 +437,10 @@ export const MetadataPreview: React.FC = () => {
                   const isActive = selectedFormatId === form.id;
                   // Determine if this format needs ffmpeg (>720p video)
                   const needsFfmpeg = (() => {
-                    if (!form.hasVideo) return false;
+                    if (!form.hasVideo || analyzedMetadata.ffmpegAvailable) return false;
                     const m = form.resolution.match(/(\d+)p/);
                     const h = m ? parseInt(m[1]) : 0;
-                    return h > 720 && !analyzedMetadata.ffmpegAvailable;
+                    return h >= 720;
                   })();
                   return (
                     <button
@@ -479,7 +475,7 @@ export const MetadataPreview: React.FC = () => {
                         ))}
                       </div>
                       <span className="text-[9px] font-mono text-ink-muted mt-0.5 truncate w-full">
-                        {form.qualityLabel}
+                        {needsFfmpeg ? `${form.qualityLabel} → 480p` : form.qualityLabel}
                       </span>
                       <span className="text-[9px] font-mono text-ink-muted mt-0.5">
                         {form.sizeLabel || "N/A"} &bull; {form.ext.toUpperCase()}

@@ -8,7 +8,7 @@ import path from "path";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { createServer as createViteServer } from "vite";
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import { DownloadState, MediaMetadata, SearchResultItem, MediaFormat } from "./src/types";
@@ -21,19 +21,34 @@ const PORT = parseInt(process.env.PORT || "", 10) || DEFAULT_PORT;
 const DOWNLOAD_DIR = path.join(os.tmpdir(), "nexload-downloads");
 fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
 
-const FFMPEG_PATH = (() => {
+function detectFfmpeg(): string | null {
   const candidates = [
-    // Common installation locations on Windows
+    process.env.FFMPEG_PATH,
     path.join(os.homedir(), "AppData", "Local", "Programs", "ffmpeg", "bin", "ffmpeg.exe"),
     path.join(os.homedir(), "AppData", "Roaming", "ffmpeg", "ffmpeg.exe"),
+    "C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe",
+    "/usr/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
     "ffmpeg",
     "ffmpeg.exe",
-  ];
-  for (const c of candidates) {
-    try { if (fs.existsSync(c)) return c; } catch {}
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    try {
+      const hasSpace = candidate.includes(" ");
+      const cmd = hasSpace ? `"${candidate}" -version` : `${candidate} -version`;
+      execSync(cmd, { stdio: "ignore", timeout: 3000, shell: true });
+      console.log(`[NexLoad] ffmpeg found at: ${candidate}`);
+      return candidate;
+    } catch {
+      continue;
+    }
   }
+  console.warn("[NexLoad] WARNING: ffmpeg not found — max ~480p without it. Install ffmpeg from https://ffmpeg.org/download.html");
   return null;
-})();
+}
+
+const FFMPEG_PATH = detectFfmpeg();
 
 const YTDLP_PATH = (() => {
   const candidates = [
@@ -230,56 +245,35 @@ function buildFormatString(
   container: string,
   ffmpegAvailable: boolean
 ): string {
+  const hFilter = buildHeightFilter(quality);
   const videoExts = ["mp4", "m4v", "mkv", "webm", "avi", "mov"];
 
-  if (!videoExts.includes(container)) {
-    // Audio-only or unknown — no height filter needed here
-    if (!quality) return "best";
-    const m = quality.match(/(\d+)p/);
-    if (!m) return "best";
-    const h = parseInt(m[1], 10);
-    return `best[height<=${h}]/best`;
-  }
-
-  if (!quality) {
-    // No quality preference — pick absolute best
+  if (videoExts.includes(container)) {
     if (ffmpegAvailable) {
-      return "bestvideo+bestaudio/best";
+      // WITH ffmpeg: download best separate streams and merge
+      // YouTube DASH: video stream + audio stream → merged MP4
+      return [
+        `bestvideo${hFilter}[ext=mp4]+bestaudio[ext=m4a]`,
+        `bestvideo${hFilter}[ext=mp4]+bestaudio`,
+        `bestvideo${hFilter}+bestaudio[ext=m4a]`,
+        `bestvideo${hFilter}+bestaudio`,
+        `best${hFilter}[ext=mp4]`,
+        `best${hFilter}`,
+        `best`,
+      ].join("/");
     } else {
-      return "best[vcodec!=none][acodec!=none]/best";
+      // WITHOUT ffmpeg: only combined streams available (max ~480p on YouTube)
+      return [
+        `best${hFilter}[ext=mp4][acodec!=none][vcodec!=none]`,
+        `best${hFilter}[acodec!=none][vcodec!=none]`,
+        `best${hFilter}`,
+        `best`,
+      ].join("/");
     }
   }
 
-  const m = quality.match(/(\d+)p/);
-  if (!m) {
-    return ffmpegAvailable
-      ? "bestvideo+bestaudio/best"
-      : "best[vcodec!=none][acodec!=none]/best";
-  }
-  const h = parseInt(m[1], 10);
-
-  if (ffmpegAvailable) {
-    // With ffmpeg: prefer separate video+audio streams merged to exact container
-    // Fallback chain from strict to permissive
-    return [
-      `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]`,
-      `bestvideo[height<=${h}][ext=mp4]+bestaudio`,
-      `bestvideo[height<=${h}]+bestaudio[ext=m4a]`,
-      `bestvideo[height<=${h}]+bestaudio`,
-      `best[height<=${h}][ext=mp4]`,
-      `best[height<=${h}]`,
-      `best`,
-    ].join("/");
-  } else {
-    // Without ffmpeg: must use pre-muxed combined streams only
-    return [
-      `best[height<=${h}][ext=mp4][vcodec!=none][acodec!=none]`,
-      `best[height<=${h}][vcodec!=none][acodec!=none]`,
-      `best[height<=${h}]`,
-      `best[height<=720]`,
-      `best`,
-    ].join("/");
-  }
+  // Audio downloads
+  return "bestaudio/best";
 }
 
 function extractMediaId(urlStr: string): string {
@@ -1077,7 +1071,7 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
 
   const outTemplate = path.join(DOWNLOAD_DIR, `${jobId}_%(title)s.%(ext)s`);
 
-  // Determine ffmpeg availability and requested height (if any)
+  // Determine ffmpeg availability and effective quality
   const ffmpegAvailable = !!FFMPEG_PATH;
   const requestedHeight = (() => {
     if (!quality) return undefined;
@@ -1089,9 +1083,18 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
   const videoExts = ["mp4", "m4v", "mkv", "webm", "avi", "mov"];
   const audioExts = ["mp3", "wav", "flac", "aac", "opus", "ogg"];
 
+  // Downgrade quality gracefully when ffmpeg is missing
+  let effectiveQuality = quality;
+  if (requestedHeight && requestedHeight > 480 && !ffmpegAvailable && videoExts.includes(extArg)) {
+    console.warn(
+      `[NexLoad] ffmpeg missing — ${quality} not possible (needs DASH merge), using best ≤480p`
+    );
+    effectiveQuality = "480p";
+  }
+
   // Debug output of request parameters
   console.log('[NexLoad] Creating job:', JSON.stringify({
-    jobId, formatId, quality, ext: extArg,
+    jobId, formatId, quality: effectiveQuality, ext: extArg,
     requestedHeight, ffmpegAvailable,
   }));
 
@@ -1102,17 +1105,15 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     "--newline",
     "--no-check-certificates",
     "--retries", "3",
-    // Sort by resolution desc, then fps, bitrate, file size — so yt-dlp picks
-    // the BEST format within any height cap, not the worst
     "--format-sort", "res,fps,br,size",
   ];
 
   if (videoExts.includes(extArg)) {
-    const formatStr = buildFormatString(quality, extArg, ffmpegAvailable);
+    const formatStr = buildFormatString(effectiveQuality, extArg, ffmpegAvailable);
     ytdlpArgs.push("-f", formatStr);
     console.log('[NexLoad] Video format string:', formatStr);
     if (ffmpegAvailable) {
-      ytdlpArgs.push("--merge-output-format", extArg);
+      ytdlpArgs.push("--merge-output-format", "mp4");
       ytdlpArgs.push("--ffmpeg-location", FFMPEG_PATH!);
     }
   } else if (audioExts.includes(extArg)) {
@@ -1122,7 +1123,7 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     if (FFMPEG_PATH) ytdlpArgs.push("--ffmpeg-location", FFMPEG_PATH);
     console.log('[NexLoad] Audio extraction mode, format:', extArg);
   } else {
-    const formatStr = buildFormatString(quality, "mp4", ffmpegAvailable);
+    const formatStr = buildFormatString(effectiveQuality, "mp4", ffmpegAvailable);
     ytdlpArgs.push("-f", formatStr);
     console.log('[NexLoad] Fallback format:', formatStr);
   }
@@ -1288,7 +1289,8 @@ app.get("/api/download/:jobId", (req, res) => {
     webp: "image/webp",
   };
   const ext = job.fileName.split(".").pop() || "";
-  res.setHeader("Content-Disposition", `attachment; filename="${job.fileName}"`);
+  const safeName = job.fileName.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, "'");
+  res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
   res.setHeader("Content-Type", mimeType[ext] || "application/octet-stream");
   res.sendFile(job.filePath);
 });

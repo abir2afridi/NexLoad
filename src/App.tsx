@@ -11,9 +11,10 @@ import GhostLoader from "./components/GhostLoader";
 import { SupportedPlatforms } from "./components/SupportedPlatforms";
 import { MetadataPreview } from "./components/MetadataPreview";
 import { SearchAndBrowse } from "./components/SearchAndBrowse";
-import { QueueDrawer } from "./components/QueueDrawer";
 import { SettingsModal } from "./components/SettingsModal";
 import { AboutModal } from "./components/AboutModal";
+import { DownloadState, QueueItem } from "./types";
+import { AnimatePresence, motion } from "motion/react";
 import {
   Search,
   Settings,
@@ -23,6 +24,11 @@ import {
   Clipboard,
   X,
   Heart,
+  ChevronDown,
+  AlertTriangle,
+  Gauge,
+  Clock,
+  Save,
 } from "lucide-react";
 
 const HeroSunSVG = () => (
@@ -100,9 +106,73 @@ function DownloaderDashboard() {
     setSettingsOpen,
     setAboutOpen,
     themeMode,
+    activeJobs,
+    updateJob,
+    removeJob,
+    isQueueExpanded,
+    setQueueExpanded,
   } = useAppStore();
 
   const [hasAnimationShake, setHasAnimationShake] = useState(false);
+  const [headerQueueOpen, setHeaderQueueOpen] = useState(false);
+
+  const activeCount = activeJobs.filter(
+    (j) => j.state !== DownloadState.COMPLETED && j.state !== DownloadState.FAILED
+  ).length;
+  const failedCount = activeJobs.filter(
+    (j) => j.state === DownloadState.FAILED
+  ).length;
+
+  // ─── Poll active jobs ───
+  useEffect(() => {
+    const activeRunningJobs = activeJobs.filter(
+      (job) => job.state !== DownloadState.COMPLETED && job.state !== DownloadState.FAILED
+    );
+    if (activeRunningJobs.length === 0) return;
+
+    const pollInterval = setInterval(async () => {
+      for (const runningJob of activeRunningJobs) {
+        try {
+          const res = await fetch(`/api/jobs/${runningJob.id}`);
+          if (!res.ok) continue;
+          const data = await res.json();
+          updateJob(runningJob.id, {
+            state: data.state,
+            progress: data.progress,
+            speedMbps: data.speedMbps,
+            etaSeconds: data.etaSeconds,
+            downloadUrl: data.downloadUrl,
+            fileSizeLabel: data.fileSizeLabel,
+            quality: data.quality,
+            error: data.error,
+          });
+        } catch {}
+      }
+    }, 800);
+
+    return () => clearInterval(pollInterval);
+  }, [activeJobs, updateJob]);
+
+  // ─── Open header dropdown when a new job is added ───
+  useEffect(() => {
+    if (isQueueExpanded) {
+      setHeaderQueueOpen(true);
+      setQueueExpanded(false);
+    }
+  }, [isQueueExpanded, setQueueExpanded]);
+
+  // ─── Close header queue dropdown on outside click ───
+  useEffect(() => {
+    if (!headerQueueOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".header-queue-dropdown-area")) {
+        setHeaderQueueOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [headerQueueOpen]);
 
   // ─── Theme: toggle .dark / .dark-2 class on <html> ───
   useEffect(() => {
@@ -229,6 +299,145 @@ function DownloaderDashboard() {
             >
               <Github className="w-3.5 h-3.5" />
             </a>
+            {activeJobs.length > 0 && (
+              <div className="relative hidden sm:block header-queue-dropdown-area">
+                <button
+                  onClick={() => setHeaderQueueOpen(!headerQueueOpen)}
+                  className="flex items-center gap-2 pl-3 ml-3 border-l border-sand text-[10px] text-ink/70 tracking-wider hover:text-ink transition-all cursor-pointer"
+                >
+                  <div
+                    className={`w-2 h-2 ${
+                      activeCount > 0
+                        ? "bg-amber animate-pulse"
+                        : failedCount > 0
+                        ? "bg-red"
+                        : "bg-ink/20"
+                    }`}
+                  />
+                  <span className="whitespace-nowrap">
+                    {activeCount > 0
+                      ? `Downloading ${activeCount} file${activeCount > 1 ? "s" : ""}`
+                      : failedCount > 0
+                      ? `${failedCount} failed`
+                      : "All tasks completed"}
+                  </span>
+                  <ChevronDown className={`w-3 h-3 text-ink-muted transition-transform ${headerQueueOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                <AnimatePresence>
+                  {headerQueueOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-2 w-[480px] max-w-[90vw] card-brutalist bg-cream shadow-xl max-h-[400px] overflow-y-auto custom-scrollbar"
+                    >
+                      <div className="p-1 border-b border-sand flex items-center justify-between px-3 py-2">
+                        <span className="text-[9px] uppercase tracking-widest text-ink-muted font-medium">Queue</span>
+                        <span className="text-[9px] text-ink-muted bg-ink/5 px-2 py-0.5 border border-sand">{activeJobs.length} total</span>
+                      </div>
+                      <div className="flex flex-col gap-1 p-2">
+                        {activeJobs.map((job) => (
+                          <div
+                            key={job.id}
+                            className="p-2.5 flex items-start justify-between gap-2 hover:bg-ink/[0.02] rounded-sm transition-all"
+                          >
+                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                              <img
+                                src={job.thumbnail || "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=120&fit=crop"}
+                                alt={job.title}
+                                className="w-10 h-7 object-cover bg-ink/5 shrink-0"
+                                referrerPolicy="no-referrer"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className="text-[7px] tracking-[0.15em] uppercase px-1 py-0.5 text-amber bg-amber/10 border border-amber/20">
+                                    {job.platform}
+                                  </span>
+                                  {job.quality && (
+                                    <span className="text-[7px] tracking-[0.1em] uppercase px-1 py-0.5 text-ink-muted bg-ink/5 border border-sand">
+                                      {job.quality}
+                                    </span>
+                                  )}
+                                  {job.fileSizeLabel && job.state === DownloadState.COMPLETED && (
+                                    <span className="text-[7px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-1 py-0.5">
+                                      ✓ {job.fileSizeLabel}
+                                    </span>
+                                  )}
+                                </div>
+                                <h4 className="text-[10px] text-ink/70 truncate">{job.title}</h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <div className="flex-1 h-1 bg-ink/5">
+                                    <motion.div
+                                      initial={{ width: 0 }}
+                                      animate={{ width: `${job.progress}%` }}
+                                      transition={{ type: "spring", stiffness: 80, damping: 15 }}
+                                      className="bg-amber h-full"
+                                    />
+                                  </div>
+                                  <span className="text-[8px] font-bold text-ink-light w-6 text-right">{Math.round(job.progress)}%</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {job.state === DownloadState.DOWNLOADING && (
+                                <>
+                                  {job.speedMbps && (
+                                    <span className="flex items-center gap-1 text-[8px] text-ink-muted">
+                                      <Gauge className="w-2 h-2" />
+                                      {job.speedMbps} Mbps
+                                    </span>
+                                  )}
+                                  {job.etaSeconds && (
+                                    <span className="flex items-center gap-1 text-[8px] text-ink-muted">
+                                      <Clock className="w-2 h-2" />
+                                      {job.etaSeconds}s
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                              {job.state !== DownloadState.COMPLETED && job.state !== DownloadState.FAILED && (
+                                <span className="text-[7px] px-1.5 py-0.5 bg-ink/5 border border-sand text-ink-muted uppercase tracking-wider">
+                                  {job.state.toLowerCase().replace("_", " ")}
+                                </span>
+                              )}
+                              {job.state === DownloadState.COMPLETED && job.downloadUrl && (
+                                <button
+                                  onClick={() => { window.location.href = job.downloadUrl; }}
+                                  className="flex items-center gap-1 px-2 py-1 bg-amber hover:bg-ink text-white text-[7px] tracking-wider uppercase transition-all cursor-pointer"
+                                >
+                                  <Save className="w-2 h-2" /> Save
+                                </button>
+                              )}
+                              {job.state === DownloadState.FAILED && (
+                                <div className="flex flex-col items-end gap-0.5" title={job.error}>
+                                  <div className="flex items-center gap-1 px-1.5 py-0.5 bg-red/10 border border-red/20 text-red text-[7px] uppercase tracking-wider whitespace-nowrap">
+                                    <AlertTriangle className="w-2 h-2" /> Failed
+                                  </div>
+                                  {job.error && (
+                                    <span className="text-[6px] text-red/60 max-w-[140px] text-right truncate">{job.error}</span>
+                                  )}
+                                </div>
+                              )}
+                              {job.state !== DownloadState.COMPLETED && job.state !== DownloadState.FAILED && (
+                                <button
+                                  onClick={() => removeJob(job.id)}
+                                  className="p-1 text-ink-muted hover:text-ink hover:bg-ink/5 transition-all cursor-pointer"
+                                >
+                                  <X className="w-2.5 h-2.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -415,9 +624,6 @@ function DownloaderDashboard() {
           </div>
         </section>
       </div>
-
-      {/* ─── QUEUE DRAWER ─── */}
-      <QueueDrawer />
 
       {/* ─── FOOTER ─── */}
       <footer className="border-t border-sand bg-cream transition-colors duration-500">
