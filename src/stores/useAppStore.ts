@@ -18,6 +18,10 @@ interface AppState {
   setSettingsOpen: (open: boolean) => void;
   setAboutOpen: (open: boolean) => void;
   
+  // App Mode
+  appMode: "video" | "image";
+  setAppMode: (mode: "video" | "image") => void;
+  
   // URL Input
   urlInput: string;
   setUrlInput: (url: string) => void;
@@ -76,6 +80,9 @@ export const useAppStore = create<AppState>()(
       isAboutOpen: false,
       setSettingsOpen: (open) => set({ isSettingsOpen: open }),
       setAboutOpen: (open) => set({ isAboutOpen: open }),
+
+      appMode: "video",
+      setAppMode: (mode) => set({ appMode: mode }),
 
       urlInput: "",
       setUrlInput: (url) => set({ urlInput: url }),

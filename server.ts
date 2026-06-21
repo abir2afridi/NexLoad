@@ -1518,6 +1518,216 @@ app.get("/api/platforms", (_req, res) => {
   ]);
 });
 
+// ── IMAGE INFO: Fetch metadata about an image URL ──
+const imageLimiter = rateLimit({ windowMs: 60000, max: 30, message: { error: "Too many image requests. Try again in a minute." } });
+
+app.post("/api/image/info", imageLimiter, async (req, res) => {
+  const { url } = req.body;
+  if (!url || typeof url !== "string") {
+    return res.status(400).json({ error: "URL is required." });
+  }
+
+  try {
+    new URL(url);
+  } catch {
+    return res.status(400).json({ error: "Invalid URL format." });
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept": "image/*, */*",
+      },
+      redirect: "follow",
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      return res.status(400).json({ error: `Server returned ${response.status} ${response.statusText}.` });
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.startsWith("image/")) {
+      return res.status(400).json({ error: `URL does not point to an image (got "${contentType}").` });
+    }
+
+    const contentLength = parseInt(response.headers.get("content-length") || "0", 10);
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    // Try to read image dimensions from buffer
+    let width: number | undefined;
+    let height: number | undefined;
+
+    if (buffer.length >= 24) {
+      // PNG: bytes 16-23 = width (4 bytes big-endian) + height (4 bytes big-endian)
+      if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+        width = buffer.readUInt32BE(16);
+        height = buffer.readUInt32BE(20);
+      }
+      // JPEG: need to scan SOF markers
+      else if (buffer[0] === 0xFF && buffer[1] === 0xD8) {
+        let offset = 2;
+        while (offset < buffer.length - 9) {
+          if (buffer[offset] !== 0xFF) break;
+          const marker = buffer[offset + 1];
+          if (marker === 0xC0 || marker === 0xC2) {
+            height = buffer.readUInt16BE(offset + 5);
+            width = buffer.readUInt16BE(offset + 7);
+            break;
+          }
+          const segLen = buffer.readUInt16BE(offset + 2);
+          offset += 2 + segLen;
+        }
+      }
+      // GIF: bytes 6-9 = width, 10-11 = height (little-endian)
+      else if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+        width = buffer.readUInt16LE(6);
+        height = buffer.readUInt16LE(8);
+      }
+      // WebP RIFF: width/height in VP8 chunk
+      else if (buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP") {
+        const chunkType = buffer.toString("ascii", 12, 16);
+        if (chunkType === "VP8 " && buffer.length >= 30) {
+          width = buffer.readUInt16LE(26) & 0x3FFF;
+          height = buffer.readUInt16LE(28) & 0x3FFF;
+        } else if (chunkType === "VP8L" && buffer.length >= 25) {
+          const bits = buffer.readUInt32LE(21);
+          width = (bits & 0x3FFF) + 1;
+          height = ((bits >> 14) & 0x3FFF) + 1;
+        }
+      }
+    }
+
+    // Derive filename from URL
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split("/").filter(Boolean);
+    let filename = pathParts[pathParts.length - 1] || "image";
+    filename = filename.replace(/\.[^.]+$/, "") || "image";
+    filename = filename.replace(/[^a-zA-Z0-9_-]/g, "_").substring(0, 80);
+
+    res.json({
+      url: url,
+      originalUrl: url,
+      filename,
+      contentType: contentType.split(";")[0].trim(),
+      sizeBytes: contentLength || buffer.length,
+      width,
+      height,
+      previewUrl: url,
+    });
+  } catch (err: any) {
+    const msg = err.name === "AbortError"
+      ? "Request timed out. The image server took too long to respond."
+      : `Failed to fetch image: ${err.message}`;
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ── IMAGE DOWNLOAD: Fetch, optionally convert, and send the image ──
+app.get("/api/image/download", imageLimiter, async (req, res) => {
+  const { url, format, quality } = req.query;
+  if (!url || typeof url !== "string") {
+    return res.status(400).json({ error: "URL is required." });
+  }
+
+  try {
+    new URL(url);
+  } catch {
+    return res.status(400).json({ error: "Invalid URL format." });
+  }
+
+  const targetFormat = (typeof format === "string" ? format : "original").toLowerCase();
+  const qualityNum = Math.min(100, Math.max(10, parseInt(typeof quality === "string" ? quality : "90", 10) || 90));
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept": "image/*, */*",
+      },
+      redirect: "follow",
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      return res.status(502).json({ error: `Upstream returned ${response.status}.` });
+    }
+
+    const contentType = response.headers.get("content-type") || "image/octet-stream";
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    // If format is original or same as source, just stream it back
+    if (targetFormat === "original" || targetFormat === contentType.split("/")[1]?.split(";")[0]) {
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split("/").filter(Boolean);
+      const baseName = (pathParts[pathParts.length - 1] || "image").replace(/[^a-zA-Z0-9._-]/g, "_");
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `attachment; filename="${baseName}"`);
+      res.setHeader("Content-Length", String(buffer.length));
+      return res.send(buffer);
+    }
+
+    // For format conversion, try sharp if available, otherwise fallback to raw
+    try {
+      const sharp = (await import("sharp")).default;
+      const extMap: Record<string, string> = {
+        jpg: "jpeg",
+        jpeg: "jpeg",
+        png: "png",
+        webp: "webp",
+        avif: "avif",
+        bmp: "bmp",
+      };
+      const sharpFormat = extMap[targetFormat] || targetFormat;
+      const converter = sharp(buffer);
+      let pipeline = converter.toFormat(sharpFormat as any);
+
+      if (["jpeg", "webp", "avif"].includes(sharpFormat)) {
+        pipeline = pipeline.jpeg({ quality: qualityNum }).webp({ quality: qualityNum }).avif({ quality: qualityNum });
+        // Re-do with correct options based on format
+        if (sharpFormat === "jpeg") pipeline = converter.jpeg({ quality: qualityNum });
+        else if (sharpFormat === "webp") pipeline = converter.webp({ quality: qualityNum });
+        else if (sharpFormat === "avif") pipeline = converter.avif({ quality: qualityNum });
+      }
+
+      const converted = await converter.toFormat(sharpFormat as any).toBuffer();
+      const mimeTypes: Record<string, string> = {
+        jpeg: "image/jpeg",
+        png: "image/png",
+        webp: "image/webp",
+        avif: "image/avif",
+        bmp: "image/bmp",
+      };
+      res.setHeader("Content-Type", mimeTypes[sharpFormat] || "application/octet-stream");
+      res.setHeader("Content-Disposition", `attachment; filename="image.${targetFormat}"`);
+      res.setHeader("Content-Length", String(converted.length));
+      return res.send(converted);
+    } catch {
+      // sharp not available, send raw
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `attachment; filename="image_original"`);
+      res.setHeader("Content-Length", String(buffer.length));
+      return res.send(buffer);
+    }
+  } catch (err: any) {
+    const msg = err.name === "AbortError"
+      ? "Download timed out."
+      : `Failed to download image: ${err.message}`;
+    res.status(500).json({ error: msg });
+  }
+});
+
 // ── Debug quality test endpoint (dev only) ──
 // Shows the format strings being generated for each quality level.
 if (process.env.NODE_ENV !== "production") {
