@@ -60,7 +60,10 @@ export interface MediaMetadata {
   formats: MediaFormat[];
   recommendedFormatId?: string;
   playlistItems?: PlaylistItem[];
+  // Indicates if ffmpeg is available on the server (required for merging high‑resolution streams)
+  ffmpegAvailable?: boolean;
 }
+
 
 export interface PlaylistItem {
   id: string;

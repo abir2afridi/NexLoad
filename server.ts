@@ -14,7 +14,9 @@ import os from "os";
 import { DownloadState, MediaMetadata, SearchResultItem, MediaFormat } from "./src/types";
 
 const app = express();
-const PORT = 3000;
+const DEFAULT_PORT = 3000;
+// Use PORT environment variable if provided; fallback to default.
+const PORT = parseInt(process.env.PORT || "", 10) || DEFAULT_PORT;
 
 const DOWNLOAD_DIR = path.join(os.tmpdir(), "nexload-downloads");
 fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
@@ -373,6 +375,7 @@ function generateMockMetadata(url: string, platform: PlatformId): MediaMetadata 
     durationSeconds: duration,
     durationLabel: `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, "0")}`,
     uploadDate,
+    ffmpegAvailable: !!FFMPEG_PATH,
     views,
     likes,
     description,
@@ -799,6 +802,23 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
   activeJobsStore.set(jobId, activeJob);
 
   const outTemplate = path.join(DOWNLOAD_DIR, `${jobId}_%(title)s.%(ext)s`);
+
+  // Determine ffmpeg availability and requested height (if any)
+  const ffmpegAvailable = !!FFMPEG_PATH;
+  let heightFilter = "";
+  let requestedHeight: number | undefined;
+  if (quality) {
+    const m = quality.match(/(\d+)p/);
+    if (m) {
+      requestedHeight = parseInt(m[1], 10);
+      heightFilter = `[height<=${requestedHeight}]`;
+    }
+  }
+  // If a high‑resolution video is requested but ffmpeg is not present, reject the request.
+  if (requestedHeight && requestedHeight > 720 && !ffmpegAvailable && ["mp4", "m4v", "mkv", "webm", "avi", "mov"].includes(ext || "mp4")) {
+    return res.status(400).json({ error: "Requested high‑resolution video requires ffmpeg for merging separate streams. Please install ffmpeg or select a lower resolution." });
+  }
+
   const extArg = ext || "mp4";
 
   const ytdlpArgs = [
@@ -809,29 +829,25 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     "--no-check-certificates",
   ];
 
-  const ffmpegAvailable = !!FFMPEG_PATH;
+  // Debug output of request parameters
+  console.log('DEBUG: formatId=', formatId, 'quality=', quality, 'ext=', extArg, 'ffmpegAvailable=', ffmpegAvailable);
 
-  // Derive a height filter from the requested quality (e.g., "1080p" -> "[height<=1080]")
-  let heightFilter = "";
-  if (quality) {
-    const m = quality.match(/(\d+)p/);
-    if (m) heightFilter = `[height<=${m[1]}]`;
-  }
+  // Map mock format IDs to valid yt-dlp format selectors using quality/height.
+  const videoExts = ["mp4", "m4v", "mkv", "webm", "avi", "mov"];
+  const audioExts = ["mp3", "wav", "flac", "aac", "opus", "ogg"];
 
-  if (["mp4", "m4v", "mkv", "webm", "avi", "mov"].includes(extArg)) {
+  if (videoExts.includes(extArg)) {
     if (ffmpegAvailable) {
-      // Prefer a pre‑muxed combined format first, then fall back to separate streams that need merging.
       ytdlpArgs.push(
         "-f",
-        `best${heightFilter}[ext=${extArg}][acodec!=none][vcodec!=none]/bestvideo${heightFilter}[ext=${extArg}]+bestaudio[ext=m4a]`,
+        `bestvideo${heightFilter}[ext=${extArg}]+bestaudio[ext=m4a]/best${heightFilter}[ext=${extArg}][acodec!=none][vcodec!=none]/best`,
         "--merge-output-format",
         extArg
       );
     } else {
-      // No ffmpeg: only use formats that already contain both audio and video (no merge).
-      ytdlpArgs.push("-f", `best${heightFilter}[ext=${extArg}][acodec!=none][vcodec!=none]`);
+      ytdlpArgs.push("-f", `best${heightFilter}[ext=${extArg}][acodec!=none][vcodec!=none]/best`);
     }
-  } else if (["mp3", "wav", "flac", "aac", "opus", "ogg"].includes(extArg)) {
+  } else if (audioExts.includes(extArg)) {
     ytdlpArgs.push("-x", "--audio-format", extArg);
   } else {
     ytdlpArgs.push("-f", "best");
@@ -839,6 +855,7 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
 
   console.log(`[yt-dlp] Spawning: ${YTDLP_PATH} ${ytdlpArgs.join(" ")}`);
   const proc = spawn(YTDLP_PATH, ytdlpArgs, { windowsHide: true });
+
 
   let stderrData = "";
   proc.stdout.on("data", (chunk: Buffer) => {
@@ -1000,11 +1017,18 @@ app.get("/api/platforms", (_req, res) => {
 });
 
 async function bootstrap() {
+  // Determine Vite HMR configuration (disable for simplicity to avoid port conflicts)
+  const viteConfig = {
+    server: {
+      middlewareMode: true,
+      // Disable HMR to prevent WebSocket port 24678 conflicts in dev mode
+      hmr: false,
+    },
+    appType: "spa",
+  };
+
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
+    const vite = await createViteServer(viteConfig);
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
@@ -1014,9 +1038,27 @@ async function bootstrap() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`NexLoad Engine booted on http://localhost:${PORT}`);
-  });
+  // Listen on the desired port, with fallback if already in use.
+  const startServer = (port: number) => {
+    return new Promise<void>((resolve, reject) => {
+      const serverInstance = app.listen(port, "0.0.0.0", () => {
+        console.log(`NexLoad Engine booted on http://localhost:${port}`);
+        resolve();
+      });
+      serverInstance.on("error", (err: any) => {
+        if (err.code === "EADDRINUSE") {
+          const nextPort = port + 1;
+          console.warn(`Port ${port} in use, trying ${nextPort}`);
+          // Try next port recursively
+          startServer(nextPort).then(resolve).catch(reject);
+        } else {
+          reject(err);
+        }
+      });
+    });
+  };
+
+  await startServer(PORT);
 }
 
 bootstrap().catch((err) => {

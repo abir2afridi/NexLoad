@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from "react";
 import { useAppStore } from "../stores/useAppStore";
 import { addHistoryRecord } from "../lib/db";
-import { DownloadState, QueueItem } from "../types";
+import { DownloadState, QueueItem, MediaFormat } from "../types";
 import { motion } from "motion/react";
 import {
   Calendar,
@@ -39,8 +39,8 @@ export const MetadataPreview: React.FC = () => {
   if (!analyzedMetadata) return null;
 
   useEffect(() => {
-    if (!hasSetDefaultFormat.current && analyzedMetadata.formats.length > 0) {
-      setSelectedFormatId(analyzedMetadata.recommendedFormatId || analyzedMetadata.formats[0].id);
+    if (!hasSetDefaultFormat.current && filteredFormats.length > 0) {
+      setSelectedFormatId(analyzedMetadata.recommendedFormatId || filteredFormats[0].id);
       hasSetDefaultFormat.current = true;
     }
   }, [analyzedMetadata]);
@@ -53,7 +53,22 @@ export const MetadataPreview: React.FC = () => {
     }
   }, [analyzedMetadata]);
 
-  const selectedFormat = analyzedMetadata.formats.find((f) => f.id === selectedFormatId);
+  const canUseHighRes = analyzedMetadata.ffmpegAvailable;
+  let filteredFormats: MediaFormat[] = [];
+  if (canUseHighRes) {
+    filteredFormats = analyzedMetadata.formats;
+  } else {
+    const maxHeight = 720;
+    filteredFormats = analyzedMetadata.formats.filter((f) => {
+      if (!f.hasVideo) return true; // audio‑only always allowed
+      const m = f.resolution.match(/(\d+)p/);
+      const height = m ? parseInt(m[1], 10) : Infinity;
+      return height <= maxHeight;
+    });
+  }
+
+  const selectedFormat = filteredFormats.find((f) => f.id === selectedFormatId);
+
 
   const toggleChapter = (index: number) => {
     setSelectedChapters((prev) =>
@@ -200,7 +215,7 @@ export const MetadataPreview: React.FC = () => {
               referrerPolicy="no-referrer"
             />
             <div className="absolute top-3 left-3 bg-cream-dark px-3 py-1 border border-ink/10 text-[10px] font-mono text-ink-light">
-              {analyzedMetadata.formats[0]?.resolution || "HD"}
+               {filteredFormats[0]?.resolution || "HD"}
             </div>
             <div className="absolute bottom-3 right-3 bg-cream-dark px-2.5 py-1 border border-ink/10 text-[10px] font-mono text-ink-light">
               {analyzedMetadata.durationLabel}
@@ -397,7 +412,7 @@ export const MetadataPreview: React.FC = () => {
             <div className="flex flex-col gap-3">
               <span className="label-meta">Select Output Quality</span>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-ink/10">
-                {analyzedMetadata.formats.map((form) => {
+                 {filteredFormats.map((form) => {
                   const isActive = selectedFormatId === form.id;
                   return (
                     <button
