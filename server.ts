@@ -19,6 +19,20 @@ const PORT = 3000;
 const DOWNLOAD_DIR = path.join(os.tmpdir(), "nexload-downloads");
 fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
 
+const FFMPEG_PATH = (() => {
+  const candidates = [
+    // Common installation locations on Windows
+    path.join(os.homedir(), "AppData", "Local", "Programs", "ffmpeg", "bin", "ffmpeg.exe"),
+    path.join(os.homedir(), "AppData", "Roaming", "ffmpeg", "ffmpeg.exe"),
+    "ffmpeg",
+    "ffmpeg.exe",
+  ];
+  for (const c of candidates) {
+    try { if (fs.existsSync(c)) return c; } catch {}
+  }
+  return null;
+})();
+
 const YTDLP_PATH = (() => {
   const candidates = [
     path.join(os.homedir(), "AppData", "Roaming", "Python", "Python313", "Scripts", "yt-dlp.exe"),
@@ -795,8 +809,28 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     "--no-check-certificates",
   ];
 
+  const ffmpegAvailable = !!FFMPEG_PATH;
+
+  // Derive a height filter from the requested quality (e.g., "1080p" -> "[height<=1080]")
+  let heightFilter = "";
+  if (quality) {
+    const m = quality.match(/(\d+)p/);
+    if (m) heightFilter = `[height<=${m[1]}]`;
+  }
+
   if (["mp4", "m4v", "mkv", "webm", "avi", "mov"].includes(extArg)) {
-    ytdlpArgs.push("-f", "bestvideo+bestaudio/best", "--merge-output-format", extArg);
+    if (ffmpegAvailable) {
+      // Prefer a pre‑muxed combined format first, then fall back to separate streams that need merging.
+      ytdlpArgs.push(
+        "-f",
+        `best${heightFilter}[ext=${extArg}][acodec!=none][vcodec!=none]/bestvideo${heightFilter}[ext=${extArg}]+bestaudio[ext=m4a]`,
+        "--merge-output-format",
+        extArg
+      );
+    } else {
+      // No ffmpeg: only use formats that already contain both audio and video (no merge).
+      ytdlpArgs.push("-f", `best${heightFilter}[ext=${extArg}][acodec!=none][vcodec!=none]`);
+    }
   } else if (["mp3", "wav", "flac", "aac", "opus", "ogg"].includes(extArg)) {
     ytdlpArgs.push("-x", "--audio-format", extArg);
   } else {

@@ -454,10 +454,16 @@ export const MetadataPreview: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <Download className="w-4 h-4" />
+                  {selectedFormat?.hasVideo ? (
+                    <Download className="w-4 h-4" />
+                  ) : (
+                    <Music className="w-4 h-4" />
+                  )}
                   {analyzedMetadata.playlistItems && analyzedMetadata.playlistItems.length > 0
                     ? `Batch Download (${selectedPlaylistIds.length} tracks)`
-                    : "Download Stream"}
+                    : selectedFormat?.hasVideo
+                      ? "Download Stream"
+                      : "Download Audio"}
                 </>
               )}
             </button>
