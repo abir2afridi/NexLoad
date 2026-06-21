@@ -80,25 +80,37 @@ export const MetadataPreview: React.FC = () => {
     if (!selectedFormat) return;
     setIsSubmitting(true);
 
+    const payload = {
+      url: analyzedMetadata.url,
+      title: analyzedMetadata.title,
+      thumbnail: analyzedMetadata.thumbnail,
+      platform: analyzedMetadata.platform,
+      formatId: selectedFormat.id,
+      quality: selectedFormat.resolution,
+      sizeLabel: selectedFormat.sizeLabel || "15.4 MB",
+      ext: selectedFormat.ext,
+    };
+    console.log('[NexLoad] Starting download with payload:', JSON.stringify(payload));
+
     try {
       if (analyzedMetadata.playlistItems && analyzedMetadata.playlistItems.length > 0 && selectedPlaylistIds.length > 0) {
         for (const itemId of selectedPlaylistIds) {
           const item = analyzedMetadata.playlistItems.find((p) => p.id === itemId);
           if (!item) continue;
 
+          const itemPayload = {
+            ...payload,
+            url: `${analyzedMetadata.url}&track=${item.id}`,
+            title: item.title,
+            thumbnail: item.thumbnail || analyzedMetadata.thumbnail,
+            sizeLabel: item.sizeLabel || "12.4 MB",
+          };
+          console.log('[NexLoad] Playlist item payload:', JSON.stringify(itemPayload));
+
           const res = await fetch("/api/jobs/create", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              url: `${analyzedMetadata.url}&track=${item.id}`,
-              title: item.title,
-              thumbnail: item.thumbnail || analyzedMetadata.thumbnail,
-              platform: analyzedMetadata.platform,
-              formatId: selectedFormat.id,
-              quality: selectedFormat.resolution,
-              sizeLabel: item.sizeLabel || "12.4 MB",
-              ext: selectedFormat.ext,
-            }),
+            body: JSON.stringify(itemPayload),
           });
 
           const data = await res.json();
@@ -139,16 +151,7 @@ export const MetadataPreview: React.FC = () => {
         const res = await fetch("/api/jobs/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url: analyzedMetadata.url,
-            title: analyzedMetadata.title,
-            thumbnail: analyzedMetadata.thumbnail,
-            platform: analyzedMetadata.platform,
-            formatId: selectedFormat.id,
-            quality: selectedFormat.resolution,
-            sizeLabel: selectedFormat.sizeLabel || "15.4 MB",
-            ext: selectedFormat.ext,
-          }),
+          body: JSON.stringify(payload),
         });
 
         const data = await res.json();
@@ -417,7 +420,10 @@ export const MetadataPreview: React.FC = () => {
                   return (
                     <button
                       key={form.id}
-                      onClick={() => setSelectedFormatId(form.id)}
+                      onClick={() => {
+                        console.log('[NexLoad] Quality selected:', form.id, form.resolution, form.qualityLabel);
+                        setSelectedFormatId(form.id);
+                      }}
                       className={`flex flex-col items-start gap-1 p-3.5 text-left transition-all cursor-pointer relative  ${
                         isActive
                           ? "bg-amber/10 text-ink ring-1 ring-amber"

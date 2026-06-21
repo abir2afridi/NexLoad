@@ -181,6 +181,35 @@ function generateFormats(platform: PlatformId): MediaFormat[] {
   return formats;
 }
 
+// ── Format string builder ──
+// Builds a yt-dlp format selector that respects the requested resolution.
+//   Level 1: bestvideo[height<=X][ext=mp4] + bestaudio[ext=m4a]
+//            (prefer MP4 containers for best compatibility)
+//   Level 2: bestvideo[height<=X] + bestaudio
+//            (any container, will be remuxed by ffmpeg)
+//   Level 3: best[height<=X]
+//            (single combined stream, last resort)
+function buildHeightFilter(q: string | undefined): string {
+  if (!q) return "";
+  const m = q.match(/(\d+)p/);
+  if (m) return `[height<=${parseInt(m[1], 10)}]`;
+  return "";
+}
+
+function buildFormatString(quality: string | undefined, container: string, ffmpegAvailable: boolean): string {
+  const hFilter = buildHeightFilter(quality);
+  const videoExts = ["mp4", "m4v", "mkv", "webm", "avi", "mov"];
+
+  if (videoExts.includes(container)) {
+    if (ffmpegAvailable) {
+      return `bestvideo${hFilter}+bestaudio/best${hFilter}`;
+    } else {
+      return `best${hFilter}[ext=${container}][acodec!=none][vcodec!=none]`;
+    }
+  }
+  return `best${hFilter}`;
+}
+
 function extractMediaId(urlStr: string): string {
   try {
     const url = new URL(urlStr);
@@ -805,15 +834,13 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
 
   // Determine ffmpeg availability and requested height (if any)
   const ffmpegAvailable = !!FFMPEG_PATH;
-  let heightFilter = "";
-  let requestedHeight: number | undefined;
-  if (quality) {
+  const heightFilter = buildHeightFilter(quality);
+  const requestedHeight = (() => {
+    if (!quality) return undefined;
     const m = quality.match(/(\d+)p/);
-    if (m) {
-      requestedHeight = parseInt(m[1], 10);
-      heightFilter = `[height<=${requestedHeight}]`;
-    }
-  }
+    return m ? parseInt(m[1], 10) : undefined;
+  })();
+
   // If a high‑resolution video is requested but ffmpeg is not present, reject the request.
   if (requestedHeight && requestedHeight > 720 && !ffmpegAvailable && ["mp4", "m4v", "mkv", "webm", "avi", "mov"].includes(ext || "mp4")) {
     return res.status(400).json({ error: "Requested high‑resolution video requires ffmpeg for merging separate streams. Please install ffmpeg or select a lower resolution." });
@@ -830,30 +857,28 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
   ];
 
   // Debug output of request parameters
-  console.log('DEBUG: formatId=', formatId, 'quality=', quality, 'ext=', extArg, 'ffmpegAvailable=', ffmpegAvailable);
+  console.log('[NexLoad] Creating job:', JSON.stringify({ jobId, formatId, quality, ext: extArg, heightFilter, ffmpegAvailable }));
 
-  // Map mock format IDs to valid yt-dlp format selectors using quality/height.
   const videoExts = ["mp4", "m4v", "mkv", "webm", "avi", "mov"];
   const audioExts = ["mp3", "wav", "flac", "aac", "opus", "ogg"];
 
   if (videoExts.includes(extArg)) {
+    const formatStr = buildFormatString(quality, extArg, ffmpegAvailable);
+    ytdlpArgs.push("-f", formatStr);
+    console.log('[NexLoad] Video format string:', formatStr);
     if (ffmpegAvailable) {
-      ytdlpArgs.push(
-        "-f",
-        `bestvideo${heightFilter}[ext=${extArg}]+bestaudio[ext=m4a]/best${heightFilter}[ext=${extArg}][acodec!=none][vcodec!=none]/best`,
-        "--merge-output-format",
-        extArg
-      );
-    } else {
-      ytdlpArgs.push("-f", `best${heightFilter}[ext=${extArg}][acodec!=none][vcodec!=none]/best`);
+      ytdlpArgs.push("--merge-output-format", extArg);
     }
   } else if (audioExts.includes(extArg)) {
     ytdlpArgs.push("-x", "--audio-format", extArg);
+    console.log('[NexLoad] Audio extraction mode, format:', extArg);
   } else {
-    ytdlpArgs.push("-f", "best");
+    const formatStr = `best${heightFilter}`;
+    ytdlpArgs.push("-f", formatStr);
+    console.log('[NexLoad] Unknown container, using fallback format:', formatStr);
   }
 
-  console.log(`[yt-dlp] Spawning: ${YTDLP_PATH} ${ytdlpArgs.join(" ")}`);
+  console.log(`[NexLoad] yt-dlp full command: ${YTDLP_PATH} ${ytdlpArgs.join(" ")}`);
   const proc = spawn(YTDLP_PATH, ytdlpArgs, { windowsHide: true });
 
 
@@ -1016,7 +1041,69 @@ app.get("/api/platforms", (_req, res) => {
   ]);
 });
 
+// ── Debug quality test endpoint (dev only) ──
+// Shows the format strings being generated for each quality level.
+if (process.env.NODE_ENV !== "production") {
+  app.get("/api/debug/quality-test", (_req, res) => {
+    const qualities = ["2160p", "1080p", "720p", "480p", "360p", "best"];
+    const containers = ["mp4", "webm"];
+    const ffmpegModes = [true, false];
+    const results: any = {};
+
+    for (const q of qualities) {
+      const key = q === "best" ? "best" : q;
+      results[key] = {};
+      for (const c of containers) {
+        results[key][c] = {};
+        for (const ff of ffmpegModes) {
+          const label = ff ? "with-ffmpeg" : "no-ffmpeg";
+          results[key][c][label] = {
+            heightFilter: buildHeightFilter(q === "best" ? "" : q),
+            formatString: buildFormatString(q === "best" ? "" : q, c, ff),
+          };
+        }
+      }
+    }
+
+    res.json({
+      ytdlpPath: YTDLP_PATH,
+      ffmpegPath: FFMPEG_PATH || "not found",
+      ffmpegAvailable: !!FFMPEG_PATH,
+      formats: results,
+    });
+  });
+}
+
 async function bootstrap() {
+  // ── Dependency verification (FIX G) ──
+  try {
+    const ytdlpCheck = spawn(YTDLP_PATH, ["--version"], { windowsHide: true });
+    ytdlpCheck.stdout.on("data", (d: Buffer) => {
+      console.log(`[NexLoad] yt-dlp version: ${d.toString().trim()}`);
+    });
+    ytdlpCheck.on("error", () => {
+      console.warn(`[NexLoad] WARNING: yt-dlp not found at "${YTDLP_PATH}". Downloads will fail.`);
+    });
+  } catch {
+    console.warn(`[NexLoad] WARNING: Could not verify yt-dlp.`);
+  }
+
+  if (FFMPEG_PATH) {
+    try {
+      const ffmpegCheck = spawn(FFMPEG_PATH, ["-version"], { windowsHide: true });
+      ffmpegCheck.stdout.on("data", (d: Buffer) => {
+        console.log(`[NexLoad] ffmpeg version: ${d.toString().split("\n")[0].trim()}`);
+      });
+      ffmpegCheck.on("error", () => {
+        console.warn(`[NexLoad] WARNING: ffmpeg binary not found at "${FFMPEG_PATH}"`);
+      });
+    } catch {
+      console.warn(`[NexLoad] WARNING: Could not verify ffmpeg.`);
+    }
+  } else {
+    console.warn("[NexLoad] WARNING: ffmpeg not installed. High-resolution video downloads (>720p) will be rejected.");
+  }
+
   // Determine Vite HMR configuration (disable for simplicity to avoid port conflicts)
   const viteConfig = {
     server: {
