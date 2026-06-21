@@ -139,42 +139,71 @@ function extractPlatform(urlStr: string): PlatformId {
   }
 }
 
-function generateFormats(platform: PlatformId): MediaFormat[] {
+function generateFormats(
+  platform: PlatformId,
+  durationSeconds?: number
+): MediaFormat[] {
+  const dur = durationSeconds ?? 300; // fallback 5min estimate
+
+  // Typical combined bitrates in kbps per quality tier
+  const bitrates: Record<string, number> = {
+    "2160p": 15000,  // 4K HDR ~15 Mbps
+    "1080p": 4500,   // 1080p ~4.5 Mbps
+    "720p":  2500,   // 720p  ~2.5 Mbps
+    "480p":  1000,   // 480p  ~1.0 Mbps
+  };
+
+  function estimateSize(kbps: number) {
+    const bytes = Math.round((kbps * 1000 / 8) * dur);
+    const mb = bytes / (1024 * 1024);
+    const label = mb >= 1000
+      ? `${(mb / 1024).toFixed(1)} GB`
+      : `${mb.toFixed(1)} MB`;
+    return { sizeBytes: bytes, sizeLabel: label };
+  }
+
+  const s4k    = estimateSize(bitrates["2160p"]);
+  const s1080  = estimateSize(bitrates["1080p"]);
+  const s720   = estimateSize(bitrates["720p"]);
+  const s480   = estimateSize(bitrates["480p"]);
+  const sMP3   = estimateSize(320);
+  const sFLAC  = estimateSize(1411);
+
   const formats: MediaFormat[] = [
     {
       id: "best_mp4_2160p", ext: "mp4", resolution: "2160p",
-      qualityLabel: "4K (60fps) HDR MP4", fps: 60,
-      sizeBytes: 157286400, sizeLabel: "150.0 MB",
+      qualityLabel: "4K HDR MP4 (requires ffmpeg)", fps: 60,
+      sizeBytes: s4k.sizeBytes, sizeLabel: s4k.sizeLabel,
       hasVideo: true, hasAudio: true, container: "mp4",
     },
     {
       id: "best_mp4_1080p", ext: "mp4", resolution: "1080p",
-      qualityLabel: "1080p (60fps) MP4", fps: 60,
-      sizeBytes: 78643200, sizeLabel: "75.0 MB",
+      qualityLabel: "1080p Full HD MP4", fps: 60,
+      sizeBytes: s1080.sizeBytes, sizeLabel: s1080.sizeLabel,
       hasVideo: true, hasAudio: true, container: "mp4",
     },
     {
       id: "medium_mp4_720p", ext: "mp4", resolution: "720p",
-      qualityLabel: "720p (30fps) MP4", fps: 30,
-      sizeBytes: 41943040, sizeLabel: "40.0 MB",
+      qualityLabel: "720p HD MP4", fps: 30,
+      sizeBytes: s720.sizeBytes, sizeLabel: s720.sizeLabel,
       hasVideo: true, hasAudio: true, container: "mp4",
     },
     {
       id: "low_mp4_480p", ext: "mp4", resolution: "480p",
-      qualityLabel: "480p (30fps) MP4", fps: 30,
-      sizeBytes: 20971520, sizeLabel: "20.0 MB",
+      qualityLabel: "480p SD MP4", fps: 30,
+      sizeBytes: s480.sizeBytes, sizeLabel: s480.sizeLabel,
       hasVideo: true, hasAudio: true, container: "mp4",
     },
     {
       id: "audio_mp3_320", ext: "mp3", resolution: "Audio Only",
-      qualityLabel: "Audio Only - High (320kbps MP3)",
-      sizeBytes: 12582912, sizeLabel: "12.0 MB",
+      qualityLabel: "Audio — MP3 320kbps",
+      sizeBytes: sMP3.sizeBytes, sizeLabel: sMP3.sizeLabel,
       hasVideo: false, hasAudio: true, bitrate: 320, container: "mp3",
     },
     {
       id: "audio_flac", ext: "flac", resolution: "Audio Only",
-      qualityLabel: "Audio Only - Lossless FLAC",
-      sizeBytes: 31457280, sizeLabel: "30.0 MB",
+      qualityLabel: "Audio — FLAC Lossless",
+      sizeBytes: sFLAC.sizeBytes, sizeLabel: sFLAC.sizeLabel,
       hasVideo: false, hasAudio: true, bitrate: 1411, container: "flac",
     },
   ];
@@ -196,18 +225,61 @@ function buildHeightFilter(q: string | undefined): string {
   return "";
 }
 
-function buildFormatString(quality: string | undefined, container: string, ffmpegAvailable: boolean): string {
-  const hFilter = buildHeightFilter(quality);
+function buildFormatString(
+  quality: string | undefined,
+  container: string,
+  ffmpegAvailable: boolean
+): string {
   const videoExts = ["mp4", "m4v", "mkv", "webm", "avi", "mov"];
 
-  if (videoExts.includes(container)) {
+  if (!videoExts.includes(container)) {
+    // Audio-only or unknown — no height filter needed here
+    if (!quality) return "best";
+    const m = quality.match(/(\d+)p/);
+    if (!m) return "best";
+    const h = parseInt(m[1], 10);
+    return `best[height<=${h}]/best`;
+  }
+
+  if (!quality) {
+    // No quality preference — pick absolute best
     if (ffmpegAvailable) {
-      return `bestvideo${hFilter}+bestaudio/best${hFilter}`;
+      return "bestvideo+bestaudio/best";
     } else {
-      return `best${hFilter}[ext=${container}][acodec!=none][vcodec!=none]`;
+      return "best[vcodec!=none][acodec!=none]/best";
     }
   }
-  return `best${hFilter}`;
+
+  const m = quality.match(/(\d+)p/);
+  if (!m) {
+    return ffmpegAvailable
+      ? "bestvideo+bestaudio/best"
+      : "best[vcodec!=none][acodec!=none]/best";
+  }
+  const h = parseInt(m[1], 10);
+
+  if (ffmpegAvailable) {
+    // With ffmpeg: prefer separate video+audio streams merged to exact container
+    // Fallback chain from strict to permissive
+    return [
+      `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]`,
+      `bestvideo[height<=${h}][ext=mp4]+bestaudio`,
+      `bestvideo[height<=${h}]+bestaudio[ext=m4a]`,
+      `bestvideo[height<=${h}]+bestaudio`,
+      `best[height<=${h}][ext=mp4]`,
+      `best[height<=${h}]`,
+      `best`,
+    ].join("/");
+  } else {
+    // Without ffmpeg: must use pre-muxed combined streams only
+    return [
+      `best[height<=${h}][ext=mp4][vcodec!=none][acodec!=none]`,
+      `best[height<=${h}][vcodec!=none][acodec!=none]`,
+      `best[height<=${h}]`,
+      `best[height<=720]`,
+      `best`,
+    ].join("/");
+  }
 }
 
 function extractMediaId(urlStr: string): string {
@@ -234,9 +306,17 @@ function extractMediaId(urlStr: string): string {
 function generateMockMetadata(url: string, platform: PlatformId): MediaMetadata {
   const id = extractMediaId(url);
   const now = new Date();
-  const daysAgo = Math.floor(Math.random() * 120);
+
+  // Deterministic hash from URL so same URL always gives same duration/metadata
+  let urlHash = 0;
+  for (let i = 0; i < url.length; i++) {
+    urlHash = ((urlHash << 5) - urlHash + url.charCodeAt(i)) | 0;
+  }
+  const absHash = Math.abs(urlHash);
+
+  const daysAgo = absHash % 120;
   const uploadDate = new Date(now.getTime() - daysAgo * 86400000).toISOString();
-  const duration = Math.floor(Math.random() * 900) + 60;
+  const duration = (absHash % 840) + 60; // 60s – 900s, consistent per URL
 
   const isPlaylist = /[?&]list=|playlist|album|set|compilation|\/playlist\/|series|\/albums\/|\/sets\//i.test(url);
 
@@ -320,7 +400,7 @@ function generateMockMetadata(url: string, platform: PlatformId): MediaMetadata 
     ],
   };
 
-  const title = titles[platform]?.[Math.floor(Math.random() * titles[platform].length)] || "Untitled Media";
+  const title = titles[platform]?.[(absHash >> 2) % titles[platform].length] || "Untitled Media";
   const displayTitle = isPlaylist ? `${title} (Full Playlist)` : title;
 
   const authorNames: Record<PlatformId, string[]> = {
@@ -337,9 +417,9 @@ function generateMockMetadata(url: string, platform: PlatformId): MediaMetadata 
     generic: ["Content Creator", "Media Producer", "Stream Publisher", "Digital Artist", "Archive Bot"],
   };
 
-  const author = authorNames[platform]?.[Math.floor(Math.random() * authorNames[platform].length)] || "Unknown Author";
-  const views = Math.floor(Math.random() * 5000000) + 1000;
-  const likes = Math.floor(views * (Math.random() * 0.05 + 0.01));
+  const author = authorNames[platform]?.[(absHash >> 4) % authorNames[platform].length] || "Unknown Author";
+  const views = ((absHash % 4999001) + 1000);
+  const likes = Math.floor(views * (((absHash >> 8) % 5) * 0.01 + 0.01));
 
   const playlistTrackNames: Record<string, string[]> = {
     youtube: ["Introduction & Setup", "Core Concepts Explained", "Hands-On Implementation", "Advanced Techniques", "Real-World Examples", "Performance Optimization", "Testing & Debugging", "Deployment Guide", "Best Practices", "Q&A & Wrap-Up"],
@@ -373,7 +453,7 @@ function generateMockMetadata(url: string, platform: PlatformId): MediaMetadata 
     return fallbacks[platform] || fallbacks.generic;
   }
 
-  const formats = generateFormats(platform);
+  const formats = generateFormats(platform, duration);
 
   const tags: Record<PlatformId, string[]> = {
     youtube: ["tutorial", "webdev", "javascript", "react", "programming"],
@@ -486,6 +566,171 @@ app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
     }
 
     const platform = extractPlatform(url);
+
+    // ── Try real yt-dlp metadata fetch first ──────────────────────────────
+    let realMeta: any = null;
+    try {
+      realMeta = await new Promise<any>((resolve, reject) => {
+        const args = [
+          url,
+          "--dump-json",
+          "--no-download",
+          "--no-playlist",
+          "--no-check-certificates",
+          "--skip-download",
+        ];
+        const proc = spawn(YTDLP_PATH, args, { windowsHide: true });
+        let stdout = "";
+        let stderr = "";
+        proc.stdout.on("data", (c: Buffer) => { stdout += c.toString(); });
+        proc.stderr.on("data", (c: Buffer) => { stderr += c.toString(); });
+        proc.on("close", (code) => {
+          if (code !== 0) return reject(new Error(stderr.slice(0, 300) || `yt-dlp exited ${code}`));
+          try { resolve(JSON.parse(stdout.trim())); }
+          catch { reject(new Error("Could not parse yt-dlp JSON output.")); }
+        });
+        proc.on("error", reject);
+        // timeout after 20s
+        setTimeout(() => { proc.kill(); reject(new Error("yt-dlp metadata fetch timed out.")); }, 20000);
+      });
+    } catch (ytErr: any) {
+      console.warn("[NexLoad] yt-dlp metadata fetch failed, falling back to mock:", ytErr.message);
+    }
+
+    // ── If yt-dlp succeeded, build real MediaMetadata ─────────────────────
+    if (realMeta) {
+      const ffmpegAvail = !!FFMPEG_PATH;
+      const duration = realMeta.duration ?? 0;
+
+      // Build real format list from yt-dlp format objects
+      const seenResolutions = new Set<string>();
+      const formats: MediaFormat[] = [];
+
+      // Video formats — pick best format per resolution tier
+      const resolutionTiers = [2160, 1440, 1080, 720, 480, 360, 240];
+      for (const height of resolutionTiers) {
+        // Find best video-only or combined format at this height
+        const candidates = (realMeta.formats || []).filter((f: any) => {
+          const fh = f.height ?? 0;
+          return fh === height && f.vcodec && f.vcodec !== "none";
+        });
+        if (candidates.length === 0) continue;
+        // Pick highest tbr (total bitrate)
+        const best = candidates.sort((a: any, b: any) => (b.tbr ?? 0) - (a.tbr ?? 0))[0];
+        const resLabel = `${height}p`;
+        if (seenResolutions.has(resLabel)) continue;
+        seenResolutions.add(resLabel);
+
+        const hasAudio = best.acodec && best.acodec !== "none";
+        const needsMerge = !hasAudio; // video-only streams need ffmpeg to merge
+        const available = height <= 720 ? true : ffmpegAvail; // >720p needs ffmpeg
+
+        const tbr = best.tbr ?? (height >= 1080 ? 4500 : height >= 720 ? 2500 : 1000);
+        const sizeBytes = Math.round((tbr * 1000 / 8) * duration);
+        const mb = sizeBytes / (1024 * 1024);
+        const sizeLabel = mb >= 1000 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(1)} MB`;
+
+        formats.push({
+          id: `video_mp4_${height}p`,
+          ext: "mp4",
+          resolution: resLabel,
+          qualityLabel: height >= 2160
+            ? `4K UHD MP4${needsMerge ? " (ffmpeg required)" : ""}`
+            : height >= 1080
+              ? `${resLabel} Full HD MP4${needsMerge && !ffmpegAvail ? " ⚠ ffmpeg needed" : ""}`
+              : `${resLabel} HD MP4`,
+          fps: best.fps ?? (height >= 1080 ? 60 : 30),
+          sizeBytes,
+          sizeLabel: available ? sizeLabel : `${sizeLabel} ⚠`,
+          hasVideo: true,
+          hasAudio: true, // after merge
+          container: "mp4",
+        });
+      }
+
+      // Audio formats
+      const audioDur = duration;
+      const mp3Size = Math.round((320 * 1000 / 8) * audioDur);
+      const flacSize = Math.round((1411 * 1000 / 8) * audioDur);
+      const mp3MB = mp3Size / (1024 * 1024);
+      const flacMB = flacSize / (1024 * 1024);
+
+      formats.push({
+        id: "audio_mp3_320",
+        ext: "mp3",
+        resolution: "Audio Only",
+        qualityLabel: "MP3 320kbps",
+        sizeBytes: mp3Size,
+        sizeLabel: `${mp3MB.toFixed(1)} MB`,
+        hasVideo: false,
+        hasAudio: true,
+        bitrate: 320,
+        container: "mp3",
+      });
+      formats.push({
+        id: "audio_flac",
+        ext: "flac",
+        resolution: "Audio Only",
+        qualityLabel: "FLAC Lossless",
+        sizeBytes: flacSize,
+        sizeLabel: `${flacMB.toFixed(1)} MB`,
+        hasVideo: false,
+        hasAudio: true,
+        bitrate: 1411,
+        container: "flac",
+      });
+
+      // If no video formats found (audio-only source), just audio
+      if (formats.filter(f => f.hasVideo).length === 0) {
+        formats.unshift({
+          id: "video_best",
+          ext: "mp4",
+          resolution: "Best",
+          qualityLabel: "Best Available MP4",
+          hasVideo: true,
+          hasAudio: true,
+          container: "mp4",
+          sizeBytes: 0,
+          sizeLabel: "N/A",
+        });
+      }
+
+      const durationSec = Math.round(duration);
+      const dMin = Math.floor(durationSec / 60);
+      const dSec = (durationSec % 60).toString().padStart(2, "0");
+
+      // Recommended: best quality available without needing ffmpeg for most users
+      const recommendedId = ffmpegAvail
+        ? (formats.find(f => f.id === "video_mp4_1080p")?.id ?? formats.find(f => f.hasVideo)?.id ?? "audio_mp3_320")
+        : (formats.find(f => f.id === "video_mp4_720p")?.id ?? formats.find(f => f.hasVideo)?.id ?? "audio_mp3_320");
+
+      const metadata: MediaMetadata = {
+        id: realMeta.id ?? extractMediaId(url),
+        url,
+        platform,
+        title: realMeta.title ?? "Untitled",
+        thumbnail: realMeta.thumbnail ?? "",
+        author: realMeta.uploader ?? realMeta.channel ?? "Unknown",
+        authorAvatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(realMeta.uploader ?? "user")}`,
+        durationSeconds: durationSec,
+        durationLabel: `${dMin}:${dSec}`,
+        uploadDate: realMeta.upload_date
+          ? `${realMeta.upload_date.slice(0, 4)}-${realMeta.upload_date.slice(4, 6)}-${realMeta.upload_date.slice(6, 8)}T00:00:00Z`
+          : new Date().toISOString(),
+        views: realMeta.view_count,
+        likes: realMeta.like_count,
+        description: realMeta.description?.slice(0, 500),
+        tags: realMeta.tags?.slice(0, 5) ?? [],
+        isLive: realMeta.is_live ?? false,
+        ffmpegAvailable: ffmpegAvail,
+        formats,
+        recommendedFormatId: recommendedId,
+      };
+
+      return res.json(metadata);
+    }
+
+    // ── Fallback: mock metadata (when yt-dlp is unavailable) ──────────────
     const metadata = generateMockMetadata(url, platform);
     res.json(metadata);
   } catch (err) {
@@ -834,19 +1079,21 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
 
   // Determine ffmpeg availability and requested height (if any)
   const ffmpegAvailable = !!FFMPEG_PATH;
-  const heightFilter = buildHeightFilter(quality);
   const requestedHeight = (() => {
     if (!quality) return undefined;
     const m = quality.match(/(\d+)p/);
     return m ? parseInt(m[1], 10) : undefined;
   })();
 
-  // If a high‑resolution video is requested but ffmpeg is not present, reject the request.
-  if (requestedHeight && requestedHeight > 720 && !ffmpegAvailable && ["mp4", "m4v", "mkv", "webm", "avi", "mov"].includes(ext || "mp4")) {
-    return res.status(400).json({ error: "Requested high‑resolution video requires ffmpeg for merging separate streams. Please install ffmpeg or select a lower resolution." });
-  }
-
   const extArg = ext || "mp4";
+  const videoExts = ["mp4", "m4v", "mkv", "webm", "avi", "mov"];
+  const audioExts = ["mp3", "wav", "flac", "aac", "opus", "ogg"];
+
+  // Debug output of request parameters
+  console.log('[NexLoad] Creating job:', JSON.stringify({
+    jobId, formatId, quality, ext: extArg,
+    requestedHeight, ffmpegAvailable,
+  }));
 
   const ytdlpArgs = [
     url,
@@ -854,13 +1101,11 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     "--no-playlist",
     "--newline",
     "--no-check-certificates",
+    "--retries", "3",
+    // Sort by resolution desc, then fps, bitrate, file size — so yt-dlp picks
+    // the BEST format within any height cap, not the worst
+    "--format-sort", "res,fps,br,size",
   ];
-
-  // Debug output of request parameters
-  console.log('[NexLoad] Creating job:', JSON.stringify({ jobId, formatId, quality, ext: extArg, heightFilter, ffmpegAvailable }));
-
-  const videoExts = ["mp4", "m4v", "mkv", "webm", "avi", "mov"];
-  const audioExts = ["mp3", "wav", "flac", "aac", "opus", "ogg"];
 
   if (videoExts.includes(extArg)) {
     const formatStr = buildFormatString(quality, extArg, ffmpegAvailable);
@@ -868,30 +1113,52 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     console.log('[NexLoad] Video format string:', formatStr);
     if (ffmpegAvailable) {
       ytdlpArgs.push("--merge-output-format", extArg);
+      ytdlpArgs.push("--ffmpeg-location", FFMPEG_PATH!);
     }
   } else if (audioExts.includes(extArg)) {
+    ytdlpArgs.push("-f", "bestaudio/best");
     ytdlpArgs.push("-x", "--audio-format", extArg);
+    if (extArg === "mp3") ytdlpArgs.push("--audio-quality", "0");
+    if (FFMPEG_PATH) ytdlpArgs.push("--ffmpeg-location", FFMPEG_PATH);
     console.log('[NexLoad] Audio extraction mode, format:', extArg);
   } else {
-    const formatStr = `best${heightFilter}`;
+    const formatStr = buildFormatString(quality, "mp4", ffmpegAvailable);
     ytdlpArgs.push("-f", formatStr);
-    console.log('[NexLoad] Unknown container, using fallback format:', formatStr);
+    console.log('[NexLoad] Fallback format:', formatStr);
   }
 
-  console.log(`[NexLoad] yt-dlp full command: ${YTDLP_PATH} ${ytdlpArgs.join(" ")}`);
+  console.log(`[NexLoad] yt-dlp command: ${YTDLP_PATH} ${ytdlpArgs.join(" ")}`);
   const proc = spawn(YTDLP_PATH, ytdlpArgs, { windowsHide: true });
-
 
   let stderrData = "";
   proc.stdout.on("data", (chunk: Buffer) => {
     const line = chunk.toString();
-    const match = line.match(/(\d+\.?\d*)%/);
-    if (match) {
-      const pct = Math.min(99, parseFloat(match[1]));
+
+    // Progress percentage
+    const pctMatch = line.match(/(\d+\.?\d*)%/);
+    if (pctMatch) {
+      const pct = Math.min(99, parseFloat(pctMatch[1]));
       const job = activeJobsStore.get(jobId);
       if (job) {
         job.progress = pct;
         job.state = pct < 30 ? DownloadState.ANALYZING : DownloadState.DOWNLOADING;
+
+        // Parse speed e.g. "2.50MiB/s" or "512.00KiB/s"
+        const speedMatch = line.match(/(\d+\.?\d*)\s*(MiB|KiB|MB|KB)\/s/);
+        if (speedMatch) {
+          const val = parseFloat(speedMatch[1]);
+          const unit = speedMatch[2];
+          job.speedMbps = parseFloat(
+            (unit.startsWith("K") ? val / 1024 : val).toFixed(2)
+          );
+        }
+
+        // Parse ETA e.g. "ETA 00:34"
+        const etaMatch = line.match(/ETA\s+(\d+):(\d+)/);
+        if (etaMatch) {
+          job.etaSeconds = parseInt(etaMatch[1]) * 60 + parseInt(etaMatch[2]);
+        }
+
         activeJobsStore.set(jobId, job);
       }
     }

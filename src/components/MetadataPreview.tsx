@@ -34,40 +34,34 @@ export const MetadataPreview: React.FC = () => {
   const [selectedChapters, setSelectedChapters] = useState<number[]>([]);
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const hasSetDefaultFormat = React.useRef(false);
 
-  if (!analyzedMetadata) return null;
-
-  useEffect(() => {
-    if (!hasSetDefaultFormat.current && filteredFormats.length > 0) {
-      setSelectedFormatId(analyzedMetadata.recommendedFormatId || filteredFormats[0].id);
-      hasSetDefaultFormat.current = true;
-    }
+  // ── Show ALL formats; >720p ones get a warning icon in UI when ffmpeg missing ──
+  const filteredFormats: MediaFormat[] = React.useMemo(() => {
+    if (!analyzedMetadata) return [];
+    return analyzedMetadata.formats;
   }, [analyzedMetadata]);
 
+  // ── Reset selected format whenever the analyzed media changes (new URL) ──
   useEffect(() => {
+    if (!analyzedMetadata || filteredFormats.length === 0) return;
+    const defaultId = analyzedMetadata.recommendedFormatId || filteredFormats[0].id;
+    // Validate that recommendedFormatId actually exists in filteredFormats
+    const exists = filteredFormats.some((f) => f.id === defaultId);
+    setSelectedFormatId(exists ? defaultId : filteredFormats[0].id);
+  }, [analyzedMetadata?.url]); // re-run whenever URL changes
+
+  useEffect(() => {
+    if (!analyzedMetadata) return;
     if (analyzedMetadata.playlistItems) {
       setSelectedPlaylistIds(analyzedMetadata.playlistItems.map((item) => item.id));
     } else {
       setSelectedPlaylistIds([]);
     }
-  }, [analyzedMetadata]);
+  }, [analyzedMetadata?.url]);
 
-  const canUseHighRes = analyzedMetadata.ffmpegAvailable;
-  let filteredFormats: MediaFormat[] = [];
-  if (canUseHighRes) {
-    filteredFormats = analyzedMetadata.formats;
-  } else {
-    const maxHeight = 720;
-    filteredFormats = analyzedMetadata.formats.filter((f) => {
-      if (!f.hasVideo) return true; // audio‑only always allowed
-      const m = f.resolution.match(/(\d+)p/);
-      const height = m ? parseInt(m[1], 10) : Infinity;
-      return height <= maxHeight;
-    });
-  }
+  if (!analyzedMetadata) return null;
 
-  const selectedFormat = filteredFormats.find((f) => f.id === selectedFormatId);
+  const selectedFormat = filteredFormats.find((f) => f.id === selectedFormatId) ?? filteredFormats[0];
 
 
   const toggleChapter = (index: number) => {
@@ -218,7 +212,7 @@ export const MetadataPreview: React.FC = () => {
               referrerPolicy="no-referrer"
             />
             <div className="absolute top-3 left-3 bg-cream-dark px-3 py-1 border border-ink/10 text-[10px] font-mono text-ink-light">
-               {filteredFormats[0]?.resolution || "HD"}
+               {selectedFormat?.resolution || filteredFormats[0]?.resolution || "HD"}
             </div>
             <div className="absolute bottom-3 right-3 bg-cream-dark px-2.5 py-1 border border-ink/10 text-[10px] font-mono text-ink-light">
               {analyzedMetadata.durationLabel}
@@ -414,24 +408,65 @@ export const MetadataPreview: React.FC = () => {
 
             <div className="flex flex-col gap-3">
               <span className="label-meta">Select Output Quality</span>
+
+              {/* ffmpeg warning banner */}
+              {!analyzedMetadata.ffmpegAvailable && selectedFormat?.hasVideo && (() => {
+                const m = selectedFormat.resolution.match(/(\d+)p/);
+                const h = m ? parseInt(m[1]) : 0;
+                return h > 720;
+              })() && (
+                <div className="flex items-start gap-3 p-3 border border-amber/40 bg-amber/5 text-xs">
+                  <span className="text-amber font-bold shrink-0 mt-0.5">⚠</span>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-ink/80 font-mono">
+                      <strong>ffmpeg required</strong> for {selectedFormat.resolution} downloads.
+                    </span>
+                    <span className="text-ink-muted">
+                      Install ffmpeg to download 1080p and above. Without it, max quality is <strong>720p</strong>.
+                    </span>
+                    <a
+                      href="https://ffmpeg.org/download.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-amber underline text-[10px] tracking-wide mt-0.5 hover:text-ink transition-colors"
+                    >
+                      → Download ffmpeg from ffmpeg.org
+                    </a>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-ink/10">
-                 {filteredFormats.map((form) => {
+                {filteredFormats.map((form) => {
                   const isActive = selectedFormatId === form.id;
+                  // Determine if this format needs ffmpeg (>720p video)
+                  const needsFfmpeg = (() => {
+                    if (!form.hasVideo) return false;
+                    const m = form.resolution.match(/(\d+)p/);
+                    const h = m ? parseInt(m[1]) : 0;
+                    return h > 720 && !analyzedMetadata.ffmpegAvailable;
+                  })();
                   return (
                     <button
                       key={form.id}
                       onClick={() => {
-                        console.log('[NexLoad] Quality selected:', form.id, form.resolution, form.qualityLabel);
                         setSelectedFormatId(form.id);
                       }}
-                      className={`flex flex-col items-start gap-1 p-3.5 text-left transition-all cursor-pointer relative  ${
+                      className={`flex flex-col items-start gap-1 p-3.5 text-left transition-all cursor-pointer relative ${
                         isActive
-                          ? "bg-amber/10 text-ink ring-1 ring-amber"
-                          : "bg-cream text-ink-light hover:bg-ink/[0.02]"
+                          ? needsFfmpeg
+                            ? "bg-amber/5 text-ink ring-1 ring-amber/40"
+                            : "bg-amber/10 text-ink ring-1 ring-amber"
+                          : needsFfmpeg
+                            ? "bg-ink/[0.01] text-ink-muted/60 hover:bg-ink/[0.02] opacity-60"
+                            : "bg-cream text-ink-light hover:bg-ink/[0.02]"
                       }`}
                     >
-                      {isActive && (
+                      {isActive && !needsFfmpeg && (
                         <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-amber animate-pulse" />
+                      )}
+                      {needsFfmpeg && (
+                        <div className="absolute top-2 right-2 text-[9px] text-amber" title="Requires ffmpeg">⚠</div>
                       )}
                       <div className="flex items-center gap-1.5 w-full justify-between">
                         <span className="text-xs text-ink/70">
@@ -465,7 +500,17 @@ export const MetadataPreview: React.FC = () => {
             </button>
             <button
               onClick={handleDownloadTrigger}
-              disabled={isSubmitting || (!!analyzedMetadata.playlistItems && analyzedMetadata.playlistItems.length > 0 && selectedPlaylistIds.length === 0)}
+              disabled={
+                isSubmitting ||
+                (!!analyzedMetadata.playlistItems && analyzedMetadata.playlistItems.length > 0 && selectedPlaylistIds.length === 0) ||
+                // Disable if format needs ffmpeg but it's not installed
+                (() => {
+                  if (!selectedFormat?.hasVideo) return false;
+                  const m = selectedFormat.resolution.match(/(\d+)p/);
+                  const h = m ? parseInt(m[1]) : 0;
+                  return h > 720 && !analyzedMetadata.ffmpegAvailable;
+                })()
+              }
               className="flex-1 bg-amber hover:bg-ink text-white text-sm tracking-[0.1em] uppercase py-3 px-6 flex items-center justify-center gap-2 transition-all disabled:bg-ink/10 disabled:text-ink-muted disabled:cursor-not-allowed"
             >
               {isSubmitting ? (

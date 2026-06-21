@@ -44,6 +44,8 @@ export const QueueDrawer: React.FC = () => {
             speedMbps: data.speedMbps,
             etaSeconds: data.etaSeconds,
             downloadUrl: data.downloadUrl,
+            fileSizeLabel: data.fileSizeLabel,
+            quality: data.quality,
             error: data.error,
           });
         } catch {}
@@ -117,9 +119,16 @@ export const QueueDrawer: React.FC = () => {
                       <span className="text-[8px] tracking-[0.2em] uppercase px-1.5 py-0.5 text-amber bg-amber/10 border border-amber/20">
                         {job.platform}
                       </span>
-                      <span className="text-[9px] text-ink-muted">
-                        {job.formatId}
-                      </span>
+                      {job.quality && (
+                        <span className="text-[8px] tracking-[0.15em] uppercase px-1.5 py-0.5 text-ink-muted bg-ink/5 border border-sand">
+                          {job.quality}
+                        </span>
+                      )}
+                      {job.fileSizeLabel && job.state === DownloadState.COMPLETED && (
+                        <span className="text-[8px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5">
+                          ✓ {job.fileSizeLabel}
+                        </span>
+                      )}
                     </div>
                     <h4 className="text-xs text-ink/70 truncate max-w-lg">
                       {job.title}
