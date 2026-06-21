@@ -202,10 +202,10 @@ export const MetadataPreview: React.FC = () => {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 30 }}
       transition={{ type: "spring", stiffness: 220, damping: 25 }}
-      className="w-full card-brutalist bg-cream p-6 md:p-8 relative overflow-hidden"
+      className="w-full card-brutalist bg-cream p-4 sm:p-6 md:p-8 relative overflow-hidden"
       id="metadata-preview-panel"
     >
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 md:gap-8 relative z-10">
         {/* Left: Thumbnail */}
         <div className="lg:col-span-5 flex flex-col gap-4">
           <div className="relative aspect-video overflow-hidden border border-ink/10 bg-ink/[0.02]">
@@ -271,7 +271,7 @@ export const MetadataPreview: React.FC = () => {
               <span className="text-[9px] tracking-[0.25em] text-amber uppercase mb-1 block">
                 {analyzedMetadata.platform} Resource
               </span>
-              <h3 className="text-xl md:text-2xl font-bold text-ink leading-tight">
+              <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-ink leading-tight">
                 {analyzedMetadata.title}
               </h3>
             </div>
@@ -293,7 +293,7 @@ export const MetadataPreview: React.FC = () => {
                 },
                 { icon: Clock, label: "Duration", value: analyzedMetadata.durationLabel },
               ].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="bg-cream p-4 flex items-center gap-3 text-ink-light">
+                <div key={label} className="bg-cream p-3 sm:p-4 flex items-center gap-2 sm:gap-3 text-ink-light">
                   <Icon className="w-4 h-4 text-amber shrink-0" />
                   <div className="text-[11px] font-mono">
                     <div className="text-[8px] text-ink-muted uppercase tracking-wider">
@@ -503,7 +503,7 @@ export const MetadataPreview: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 mt-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-4">
             <button
               onClick={() => setAnalyzedMetadata(null)}
               className="px-5 py-3 font-mono text-xs border border-ink/10 text-ink-muted hover:text-ink-light hover:bg-ink/[0.02] transition-all "

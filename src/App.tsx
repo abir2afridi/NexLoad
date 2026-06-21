@@ -254,13 +254,13 @@ function DownloaderDashboard() {
     <div className="min-h-screen flex flex-col" id="nexload-app-root">
       {/* ─── HEADER ─── */}
       <header className="border-b border-sand bg-cream sticky top-0 z-40 transition-colors duration-500">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between">
           <div
-            className="flex items-center gap-3 cursor-pointer select-none"
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer select-none"
             onClick={() => setAnalyzedMetadata(null)}
           >
-            <BrandLogo size={28} />
-            <span className="font-bold tracking-wide text-ink text-lg">
+            <BrandLogo size={24} />
+            <span className="font-bold tracking-wide text-ink text-base sm:text-lg">
               NexLoad
             </span>
             <span className="hidden sm:inline-block px-2 py-0.5 bg-ink/5 border border-sand text-[10px] text-ink-light uppercase tracking-widest">
@@ -268,26 +268,26 @@ function DownloaderDashboard() {
             </span>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 sm:gap-1">
             <button
               onClick={() => {
                 const el = document.getElementById("browser-panel-root");
                 if (el) el.scrollIntoView({ behavior: "smooth" });
               }}
-              className="px-3 py-2 text-ink-muted hover:text-ink hover:bg-ink/5 border border-transparent hover:border-sand transition-all text-[10px] uppercase tracking-widest flex items-center gap-2 cursor-pointer"
+              className="px-2 sm:px-3 py-2 text-ink-muted hover:text-ink hover:bg-ink/5 border border-transparent hover:border-sand transition-all text-[10px] uppercase tracking-widest flex items-center gap-1.5 cursor-pointer"
             >
               <Search className="w-3.5 h-3.5" />
               <span className="hidden md:inline">Search</span>
             </button>
             <button
               onClick={() => setSettingsOpen(true)}
-              className="px-3 py-2 text-ink-muted hover:text-ink hover:bg-ink/5 border border-transparent hover:border-sand transition-all cursor-pointer"
+              className="px-2 sm:px-3 py-2 text-ink-muted hover:text-ink hover:bg-ink/5 border border-transparent hover:border-sand transition-all cursor-pointer"
             >
               <Settings className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setAboutOpen(true)}
-              className="px-3 py-2 text-ink-muted hover:text-ink hover:bg-ink/5 border border-transparent hover:border-sand transition-all cursor-pointer"
+              className="px-2 sm:px-3 py-2 text-ink-muted hover:text-ink hover:bg-ink/5 border border-transparent hover:border-sand transition-all cursor-pointer"
             >
               <HelpCircle className="w-3.5 h-3.5" />
             </button>
@@ -295,15 +295,15 @@ function DownloaderDashboard() {
               href="https://github.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-2 text-ink-muted hover:text-ink hover:bg-ink/5 border border-transparent hover:border-sand transition-all"
+              className="hidden sm:flex px-2 sm:px-3 py-2 text-ink-muted hover:text-ink hover:bg-ink/5 border border-transparent hover:border-sand transition-all"
             >
               <Github className="w-3.5 h-3.5" />
             </a>
             {activeJobs.length > 0 && (
-              <div className="relative hidden sm:block header-queue-dropdown-area">
+              <div className="relative header-queue-dropdown-area">
                 <button
                   onClick={() => setHeaderQueueOpen(!headerQueueOpen)}
-                  className="flex items-center gap-2 pl-3 ml-3 border-l border-sand text-[10px] text-ink/70 tracking-wider hover:text-ink transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 sm:gap-2 pl-2 sm:pl-3 ml-1 sm:ml-3 border-l border-sand text-[9px] sm:text-[10px] text-ink/70 tracking-wider hover:text-ink transition-all cursor-pointer"
                 >
                   <div
                     className={`w-2 h-2 ${
@@ -314,12 +314,15 @@ function DownloaderDashboard() {
                         : "bg-ink/20"
                     }`}
                   />
-                  <span className="whitespace-nowrap">
+                  <span className="whitespace-nowrap hidden sm:inline">
                     {activeCount > 0
                       ? `Downloading ${activeCount} file${activeCount > 1 ? "s" : ""}`
                       : failedCount > 0
                       ? `${failedCount} failed`
                       : "All tasks completed"}
+                  </span>
+                  <span className="whitespace-nowrap sm:hidden">
+                    {activeCount > 0 ? `${activeCount}` : failedCount > 0 ? `${failedCount}` : "✓"}
                   </span>
                   <ChevronDown className={`w-3 h-3 text-ink-muted transition-transform ${headerQueueOpen ? "rotate-180" : ""}`} />
                 </button>
@@ -331,7 +334,7 @@ function DownloaderDashboard() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-full mt-2 w-[480px] max-w-[90vw] card-brutalist bg-cream shadow-xl max-h-[400px] overflow-y-auto custom-scrollbar"
+                      className="absolute right-0 top-full mt-2 w-[95vw] sm:w-[480px] max-w-[95vw] card-brutalist bg-cream shadow-xl max-h-[60vh] sm:max-h-[400px] overflow-y-auto custom-scrollbar"
                     >
                       <div className="p-1 border-b border-sand flex items-center justify-between px-3 py-2">
                         <span className="text-[9px] uppercase tracking-widest text-ink-muted font-medium">Queue</span>
@@ -443,42 +446,42 @@ function DownloaderDashboard() {
       </header>
 
       {/* ─── MAIN CONTENT ─── */}
-      <div className="flex-1">
-      <main className="max-w-5xl mx-auto px-4 md:px-6 pt-4 md:pt-8 flex flex-col gap-0 relative z-10">
+      <div className="flex-1 flex flex-col items-center w-full">
+      <main className="w-full max-w-5xl mx-auto px-4 sm:px-6 pt-4 sm:pt-8 flex flex-col gap-0 relative z-10">
         {/* ─── HERO ─── (cream section) */}
         <section
-          className="text-center flex flex-col items-center gap-3 max-w-2xl mx-auto relative py-6 md:py-10"
+          className="text-center flex flex-col items-center gap-2 sm:gap-3 max-w-2xl mx-auto relative py-4 sm:py-6 md:py-10 overflow-hidden"
           id="brand-hero-section"
         >
           <div className="hero-sun"><HeroSunSVG /></div>
           <div className="hero-moon"><HeroMoonSVG /></div>
           <GhostLoader />
-          <BrandLogo size={48} />
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-ink leading-[1.05]">
+          <BrandLogo size={40} />
+          <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight text-ink leading-[1.05]">
             Stream Extraction.
             <br />
             <span className="text-amber">Simplified.</span>
           </h1>
-          <p className="text-sm text-ink-light tracking-wide mt-1">
+          <p className="text-xs sm:text-sm text-ink-light tracking-wide mt-1 px-4">
             "Download anything. Instantly." &mdash; No Tracking &bull; No Ads.
           </p>
         </section>
 
         {/* ─── URL INPUT ─── (cream section) */}
-        <section className="w-full max-w-3xl mx-auto pb-20" id="input-control-section">
+        <section className="w-full max-w-3xl mx-auto pb-12 sm:pb-20" id="input-control-section">
           <form
             onSubmit={triggerUrlValidation}
-            className={`card-brutalist flex flex-col md:flex-row gap-0 transition-all duration-300 ${
+            className={`card-brutalist flex flex-col sm:flex-row gap-0 transition-all duration-300 ${
               hasAnimationShake
                 ? "animate-shake border-red"
                 : "focus-within:border-amber"
             }`}
           >
-            <div className="flex-1 flex items-center gap-3 px-5 py-3.5 border-b md:border-b-0 md:border-r border-sand">
+            <div className="flex-1 flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 sm:py-3.5 border-b sm:border-b-0 sm:border-r border-sand">
               <Globe className="w-4 h-4 text-amber shrink-0" />
               <input
                 type="text"
-                placeholder="Paste any YouTube, TikTok, Instagram, Reddit, SoundCloud link..."
+                placeholder="Paste any YouTube, TikTok, Instagram link..."
                 value={urlInput}
                 onChange={(e) => {
                   setUrlInput(e.target.value);
@@ -498,11 +501,11 @@ function DownloaderDashboard() {
               )}
             </div>
 
-            <div className="flex gap-0 shrink-0">
+            <div className="flex w-full sm:w-auto gap-0 shrink-0">
               <button
                 type="button"
                 onClick={handlePasteClipboard}
-                className="px-4 py-3.5 bg-ink/5 border-r border-sand hover:bg-ink/10 text-ink-light hover:text-ink transition-all cursor-pointer flex items-center justify-center"
+                className="flex-1 sm:flex-none px-4 py-3 sm:py-3.5 bg-ink/5 border-r border-sand hover:bg-ink/10 text-ink-light hover:text-ink transition-all cursor-pointer flex items-center justify-center"
                 title="Paste from clipboard"
               >
                 <Clipboard className="w-3.5 h-3.5" />
@@ -510,10 +513,10 @@ function DownloaderDashboard() {
               <button
                 type="submit"
                 disabled={isAnalyzing || !urlInput.trim()}
-                className="px-8 py-3.5 bg-amber hover:bg-ink text-white text-xs tracking-[0.15em] uppercase transition-all cursor-pointer disabled:bg-ink/10 disabled:text-ink-muted disabled:cursor-not-allowed"
+                className="flex-1 sm:flex-none px-6 sm:px-8 py-3 sm:py-3.5 bg-amber hover:bg-ink text-white text-xs tracking-[0.15em] uppercase transition-all cursor-pointer disabled:bg-ink/10 disabled:text-ink-muted disabled:cursor-not-allowed"
               >
                 {isAnalyzing ? (
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-2 justify-center">
                     <span className="w-3 h-3 border border-current border-t-transparent animate-spin" />
                     Analyzing
                   </span>
@@ -567,15 +570,15 @@ function DownloaderDashboard() {
 
         {/* ─── SEARCH & BROWSE ─── (cream section) */}
         <section
-          className="w-full py-20 border-t border-sand"
+          className="w-full py-12 sm:py-20 border-t border-sand"
           id="search-panel-section"
         >
-          <div className="max-w-5xl mx-auto px-4 md:px-6">
-            <div className="flex flex-col items-center gap-2 mb-8 text-center">
-              <h2 className="text-lg font-bold tracking-tight text-ink/80">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6">
+            <div className="flex flex-col items-center gap-2 mb-6 sm:mb-8 text-center">
+              <h2 className="text-base sm:text-lg font-bold tracking-tight text-ink/80">
                 Discover &amp; Grab Streams
               </h2>
-              <p className="text-xs text-ink-muted max-w-md">
+              <p className="text-[11px] sm:text-xs text-ink-muted max-w-md px-4">
                 Search live tags or browse historic completions instantly, with
                 single-click auto-fill triggers.
               </p>
@@ -585,57 +588,57 @@ function DownloaderDashboard() {
         </section>
 
       </main>
-
-        {/* ─── TRUST CARDS ─── (burnt-orange section, full-width) */}
-        <section className="w-full bg-burnt-orange py-20">
-          <div className="max-w-5xl mx-auto px-4 md:px-6">
-            <div className="grid grid-cols-1 md:grid-cols-3">
-              {[
-                {
-                  label: "Privacy",
-                  title: "Zero Tracker Policy",
-                  desc: "No tracking tags, zero telemetry profiling, or device fingerprinting grids. Ever.",
-                },
-                {
-                  label: "Speed",
-                  title: "Transmux Engine",
-                  desc: "Bypasses platform cache limits to assemble dynamic segment streams in under 750ms.",
-                },
-                {
-                  label: "Secure",
-                  title: "Sandboxed I/O",
-                  desc: "Fully protected workspace proxy protecting raw client IP addresses and headers.",
-                },
-              ].map((card, i) => (
-                <div
-                  key={i}
-                  className="p-6 flex flex-col gap-4 border-t-0 md:border-t md:border-l-0 md:first:border-l border-sand/30 first:border-t"
-                >
-                  <span className="label-meta text-cream/70">{card.label}</span>
-                  <h5 className="text-sm font-bold text-cream">
-                    {card.title}
-                  </h5>
-                  <p className="text-xs text-cream/70 leading-relaxed">
-                    {card.desc}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
       </div>
+
+      {/* ─── TRUST CARDS ─── (burnt-orange section, full-width) */}
+      <section className="w-full bg-burnt-orange py-12 sm:py-20">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3">
+            {[
+              {
+                label: "Privacy",
+                title: "Zero Tracker Policy",
+                desc: "No tracking tags, zero telemetry profiling, or device fingerprinting grids. Ever.",
+              },
+              {
+                label: "Speed",
+                title: "Transmux Engine",
+                desc: "Bypasses platform cache limits to assemble dynamic segment streams in under 750ms.",
+              },
+              {
+                label: "Secure",
+                title: "Sandboxed I/O",
+                desc: "Fully protected workspace proxy protecting raw client IP addresses and headers.",
+              },
+            ].map((card, i) => (
+              <div
+                key={i}
+                className="p-5 sm:p-6 flex flex-col gap-3 sm:gap-4 border-t sm:border-t sm:border-l-0 sm:first:border-l border-sand/30 first:border-t"
+              >
+                <span className="label-meta text-cream/70">{card.label}</span>
+                <h5 className="text-sm font-bold text-cream">
+                  {card.title}
+                </h5>
+                <p className="text-xs text-cream/70 leading-relaxed">
+                  {card.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* ─── FOOTER ─── */}
       <footer className="border-t border-sand bg-cream transition-colors duration-500">
-        <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-3">
-            <BrandLogo size={20} />
+            <BrandLogo size={18} />
             <span className="text-sm font-bold tracking-wide text-ink">NexLoad</span>
             <span className="text-[10px] text-ink-muted tracking-wider hidden sm:inline">
               &copy; {new Date().getFullYear()}
             </span>
           </div>
-          <p className="text-[10px] text-ink-muted tracking-wider text-center md:text-right">
+          <p className="text-[10px] text-ink-muted tracking-wider text-center sm:text-right">
             Stream Extraction. Simplified. &mdash; No Tracking &bull; No Ads.
           </p>
         </div>

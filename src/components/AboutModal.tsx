@@ -50,9 +50,9 @@ export const AboutModal: React.FC = () => {
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex justify-between items-center px-6 py-4 border-b border-sand">
-            <div className="flex items-center gap-3">
-              <BrandLogo size={22} />
+          <div className="flex justify-between items-center px-4 sm:px-6 py-3 sm:py-4 border-b border-sand">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <BrandLogo size={18} />
               <h3 className="text-sm font-bold text-ink">
                 About NexLoad
               </h3>
@@ -66,28 +66,28 @@ export const AboutModal: React.FC = () => {
           </div>
 
           {/* Tabs */}
-          <div className="tab-underline-wrapper px-6 gap-6 py-2.5">
-            <div className="flex gap-6">
+          <div className="tab-underline-wrapper px-4 sm:px-6 gap-4 sm:gap-6 py-2.5">
+            <div className="flex gap-4 sm:gap-6 overflow-x-auto">
               {(["about", "api", "faq"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveSubTab(tab)}
-                  className={`tab-underline-item ${
+                  className={`tab-underline-item whitespace-nowrap ${
                     activeSubTab === tab ? "active" : ""
                   }`}
                 >
                   {tab === "about"
-                    ? "Mission & Architecture"
+                    ? "Mission"
                     : tab === "api"
-                      ? "API Docs"
-                      : "Interactive FAQ"}
+                      ? "API"
+                      : "FAQ"}
                 </button>
               ))}
             </div>
           </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 text-sm">
+        <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4 sm:gap-6 text-sm">
           {activeSubTab === "about" && (
             <div className="flex flex-col gap-5">
               <div className="text-center py-4">
@@ -229,7 +229,7 @@ export const AboutModal: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end px-6 py-4 border-t border-sand">
+        <div className="flex justify-end px-4 sm:px-6 py-3 sm:py-4 border-t border-sand">
           <button
             onClick={() => setAboutOpen(false)}
             className="px-5 py-2 bg-amber hover:bg-ink text-white text-xs tracking-[0.15em] uppercase transition-all cursor-pointer"

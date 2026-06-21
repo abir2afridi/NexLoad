@@ -58,7 +58,7 @@ export const SettingsModal: React.FC = () => {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex justify-between items-center px-6 py-4 border-b border-sand">
+        <div className="flex justify-between items-center px-4 sm:px-6 py-3 sm:py-4 border-b border-sand">
           <h3 className="text-sm font-bold text-ink">
             Supercharger Settings
           </h3>
@@ -71,7 +71,7 @@ export const SettingsModal: React.FC = () => {
         </div>
 
         {/* Body */}
-        <div className="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-8 text-sm">
+        <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 sm:gap-8 text-sm">
           {/* Appearance */}
           <div className="flex flex-col gap-4">
             <h4 className="label-meta flex items-center gap-2">
@@ -84,7 +84,7 @@ export const SettingsModal: React.FC = () => {
                 <span className="label-meta block mb-3">
                   Theme Mode
                 </span>
-                <div className="flex gap-0 border border-sand w-fit">
+                <div className="flex gap-0 border border-sand w-fit flex-wrap">
                   {[
                     { mode: "dark" as const, icon: Moon, label: "Dark" },
                     { mode: "dark2" as const, icon: Terminal, label: "Dark 2" },
@@ -96,7 +96,7 @@ export const SettingsModal: React.FC = () => {
                     <button
                       key={mode}
                       onClick={() => setThemeMode(mode)}
-                      className={`flex items-center gap-2 px-4 py-2 text-xs tracking-wider uppercase transition-all cursor-pointer ${
+                      className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 text-[10px] sm:text-xs tracking-wider uppercase transition-all cursor-pointer ${
                         themeMode === mode
                           ? "bg-amber text-white"
                           : "bg-transparent text-ink-muted hover:text-ink hover:bg-ink/5"
@@ -120,7 +120,7 @@ export const SettingsModal: React.FC = () => {
                     <button
                       key={col.value}
                       onClick={() => updateSettings({ accentColor: col.value })}
-                      className={`flex items-center gap-2 px-3 py-1.5 border text-[10px] tracking-wider uppercase transition-all cursor-pointer ${
+                      className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 border text-[9px] sm:text-[10px] tracking-wider uppercase transition-all cursor-pointer ${
                         settings.accentColor === col.value
                           ? "border-amber bg-amber/10 text-ink"
                           : "border-sand text-ink-muted hover:text-ink-light hover:border-sand-medium"
@@ -300,7 +300,7 @@ export const SettingsModal: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <div className="flex justify-between items-center px-6 py-4 border-t border-sand">
+        <div className="flex justify-between items-center px-4 sm:px-6 py-3 sm:py-4 border-t border-sand">
           <button
             onClick={resetSettings}
             className="text-[10px] tracking-wider text-ink-muted hover:text-ink uppercase transition-all cursor-pointer flex items-center gap-1.5"

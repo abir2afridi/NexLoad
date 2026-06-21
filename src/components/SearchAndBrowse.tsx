@@ -202,7 +202,7 @@ export const SearchAndBrowse: React.FC = () => {
             {item.durationLabel}
           </div>
         </div>
-        <div className="p-4">
+        <div className="p-3 sm:p-4">
           <span className="text-[8px] tracking-[0.25em] text-amber uppercase block mb-1.5">
             {item.platform}
           </span>
@@ -212,7 +212,7 @@ export const SearchAndBrowse: React.FC = () => {
           <p className="text-ink-muted text-xs mt-2">{item.author}</p>
         </div>
       </div>
-      <div className="p-4 pt-0 flex justify-between items-center text-[9px] text-ink-muted">
+      <div className="p-3 sm:p-4 pt-0 flex justify-between items-center text-[9px] text-ink-muted">
         <span>{item.viewsLabel}</span>
         <span>{item.uploadDateLabel}</span>
       </div>
@@ -224,7 +224,7 @@ export const SearchAndBrowse: React.FC = () => {
       {/* Search Bar */}
       <form
         onSubmit={handleSearchCommit}
-        className="card-brutalist flex gap-0 max-w-2xl mx-auto mb-10 focus-within:border-amber transition-all"
+        className="card-brutalist flex gap-0 max-w-2xl mx-auto mb-6 sm:mb-10 focus-within:border-amber transition-all"
         id="in-app-search-form"
       >
         <div className="relative flex-1 flex items-center">
@@ -239,7 +239,7 @@ export const SearchAndBrowse: React.FC = () => {
         </div>
         <button
           type="submit"
-          className="bg-amber hover:bg-ink text-white px-6 py-3 text-xs tracking-[0.15em] uppercase transition-all flex items-center gap-1.5"
+          className="bg-amber hover:bg-ink text-white px-4 sm:px-6 py-3 text-xs tracking-[0.15em] uppercase transition-all flex items-center gap-1.5"
         >
           {isSearching ? (
             <div className="w-4 h-4 border-2 border-current border-t-transparent animate-spin" />
@@ -250,10 +250,10 @@ export const SearchAndBrowse: React.FC = () => {
       </form>
 
       {/* Tabs */}
-      <div className="flex border-b border-sand justify-center w-full mb-8">
-        <div className="flex gap-8">
+      <div className="flex border-b border-sand justify-center w-full mb-6 sm:mb-8 overflow-x-auto">
+        <div className="flex gap-4 sm:gap-8 px-2">
           <TabButton tab="trending" icon={Flame} label="Trending" />
-          <TabButton tab="search" icon={Search} label="Search Results" />
+          <TabButton tab="search" icon={Search} label="Results" />
           <TabButton tab="history" icon={History} label="History" />
         </div>
       </div>
@@ -328,13 +328,13 @@ export const SearchAndBrowse: React.FC = () => {
                   {historyItems.map((item) => (
                     <div
                       key={item.id}
-                      className="card-brutalist-static bg-cream p-4 flex items-center justify-between gap-4"
+                      className="card-brutalist-static bg-cream p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4"
                     >
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 w-full">
                         <img
                           src={item.thumbnail}
                           alt={item.title}
-                          className="w-16 md:w-20 aspect-video object-cover bg-ink/[0.02] border border-sand"
+                          className="w-14 sm:w-16 md:w-20 aspect-video object-cover bg-ink/[0.02] border border-sand shrink-0"
                            referrerPolicy="no-referrer-when-downgrade"
                         />
                         <div className="flex-1 min-w-0">
@@ -352,7 +352,7 @@ export const SearchAndBrowse: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
                         <button
                           onClick={() => selectMediaItem(item.url)}
                           title="Parse again"
