@@ -23,11 +23,13 @@ npm run dev
 
 ## Features
 
-- **Multi-platform** — YouTube, TikTok, Instagram, Reddit, SoundCloud, Vimeo, Twitch, Twitter/X, Pinterest
+- **Multi-platform** — YouTube, TikTok, Instagram, Reddit, SoundCloud, Vimeo, Twitch, Twitter/X, Pinterest, direct URLs (MP4, etc.)
 - **Playlist support** — Batch download entire playlists with track selection
 - **Real downloads** — Powered by yt-dlp with video+audio merge
 - **Quality selection** — 4K, 1080p, 720p, 480p, Audio Only (MP3, FLAC, WAV, AAC, Opus)
-- **Download queue** — Track progress with real-time speed and ETA
+- **Download queue** — Header dropdown with real-time progress, speed, and ETA
+- **OG metadata fallback** — Extracts title & thumbnail from page HTML when yt-dlp fails (TikTok, Instagram, etc.)
+- **Direct video download** — Bypasses yt-dlp for platforms that expose direct video URLs (Pinterest, etc.)
 - **Search & Browse** — In-app trending and search across platforms
 - **Download history** — Stored locally via IndexedDB (max 500 records)
 - **Dark/Light themes** — Multiple dark modes + light mode + system preference
@@ -44,7 +46,7 @@ npm run dev
 | Backend | Express 4, Node.js |
 | Security | Helmet.js, express-rate-limit |
 | Storage | IndexedDB via Dexie.js (browser), in-memory (server) |
-| Downloads | yt-dlp (spawned subprocess) |
+| Downloads | yt-dlp (spawned subprocess), direct HTTP fallback |
 
 ## Project Structure
 
@@ -52,12 +54,11 @@ npm run dev
 NexLoad/
   server.ts              # Express backend (API + static serving)
   src/
-    App.tsx              # Main React app
+    App.tsx              # Main app with header queue dropdown
     types.ts             # TypeScript interfaces
     components/
       MetadataPreview.tsx    # Preview panel with format/playlist selection
       SearchAndBrowse.tsx    # Trending/search/history tabs
-      QueueDrawer.tsx        # Download queue with progress
       SettingsModal.tsx      # App settings
       GhostLoader.tsx        # Animated hero loader
       BrandLogo.tsx          # Logo component
@@ -65,8 +66,9 @@ NexLoad/
       useAppStore.ts         # Zustand store
     lib/
       db.ts                  # Dexie IndexedDB
-  docs/
-    plan.md               # Full project specification
+  public/
+    favicon.png          # Browser tab icon
+    banner.png           # Social sharing OG image
 ```
 
 ## API Endpoints
@@ -77,7 +79,6 @@ NexLoad/
 | POST | `/api/search` | Search across platforms |
 | POST | `/api/jobs/create` | Create a download job |
 | GET | `/api/jobs/:id` | Get job status |
-| GET | `/api/jobs/:id/progress` | SSE progress stream |
 | GET | `/api/download/:id` | Download the completed file |
 | GET | `/api/platforms` | List supported platforms |
 
@@ -87,12 +88,14 @@ NexLoad/
 - **Colors** — Warm cream (#FAF8F4) + burnt orange (#D2691E) + ink dark
 - **Corners** — Sharp 0px border-radius (editorial poster aesthetic)
 - **Animations** — Purposeful motion via Framer Motion, respects `prefers-reduced-motion`
+- **Open Graph** — Social sharing card via `banner.png`
 
 ## Requirements
 
 - Node.js 18+
 - Python 3.10+ (for yt-dlp)
 - yt-dlp (`pip install yt-dlp`)
+- ffmpeg (optional, required for >720p YouTube downloads)
 
 ## License
 

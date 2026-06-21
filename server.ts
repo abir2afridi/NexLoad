@@ -297,6 +297,87 @@ function extractMediaId(urlStr: string): string {
   }
 }
 
+async function fetchOgMetadata(url: string): Promise<{
+  title?: string; thumbnail?: string; description?: string;
+  ogType?: string; ogVideo?: string; hasVideo?: boolean;
+} | null> {
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36" },
+    });
+    clearTimeout(t);
+    if (!res.ok) return null;
+    const html = await res.text();
+    const og: {
+      title?: string; thumbnail?: string; description?: string;
+      ogType?: string; ogVideo?: string; hasVideo?: boolean;
+    } = {};
+    const titleM = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i);
+    if (titleM) og.title = titleM[1].replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d));
+    const imgM = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i);
+    if (imgM) og.thumbnail = imgM[1];
+    const descM = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]+)"/i);
+    if (descM) og.description = descM[1];
+    const typeM = html.match(/<meta[^>]+property="og:type"[^>]+content="([^"]+)"/i);
+    if (typeM) og.ogType = typeM[1];
+    const videoM = html.match(/<meta[^>]+property="og:video"[^>]+content="([^"]+)"/i);
+    if (videoM) og.ogVideo = videoM[1];
+    // If no og:video, check alternate video sources in HTML
+    if (!og.ogVideo) {
+      const altVideo = html.match(/<video[^>]+src="([^"]+)"/i);
+      if (altVideo) og.ogVideo = altVideo[1];
+    }
+    // Check JSON-LD for VideoObject contentUrl (Pinterest, TikTok, etc.)
+    if (!og.ogVideo) {
+      const ldJson = html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
+      for (const match of ldJson) {
+        try {
+          const data = JSON.parse(match[1]);
+          const items = Array.isArray(data) ? data : [data];
+          for (const item of items) {
+            if (item["@type"] === "VideoObject" && item.contentUrl) {
+              og.ogVideo = item.contentUrl;
+              break;
+            }
+            if (item["@type"] === "Product" && item.video?.contentUrl) {
+              og.ogVideo = item.video.contentUrl;
+              break;
+            }
+          }
+          if (og.ogVideo) break;
+        } catch {}
+      }
+    }
+    // Check Pinterest's __PWS_DATA__ script for video URLs
+    if (!og.ogVideo) {
+      const pwsMatch = html.match(/<script[^>]+id="__PWS_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+      if (pwsMatch) {
+        try {
+          const pws = JSON.parse(pwsMatch[1]);
+          const pinId = Object.keys(pws?.props?.initialReduxState?.pins || {})[0];
+          if (pinId) {
+            const pin = pws.props.initialReduxState.pins[pinId];
+            const videoList = pin?.videos?.video_list;
+            if (videoList) {
+              // Prefer highest quality
+              for (const key of ["V_HLSV3_DESKTOP", "V_720P", "V_480P", "V_360P", "V_HLSV3_MOBILE"]) {
+                if (videoList[key]?.url) { og.ogVideo = videoList[key].url; break; }
+              }
+            }
+          }
+        } catch {}
+      }
+    }
+    og.hasVideo = !!og.ogVideo;
+    return og.title || og.thumbnail ? og : null;
+  } catch {
+    return null;
+  }
+}
+
 function generateMockMetadata(url: string, platform: PlatformId): MediaMetadata {
   const id = extractMediaId(url);
   const now = new Date();
@@ -506,6 +587,56 @@ function generateMockMetadata(url: string, platform: PlatformId): MediaMetadata 
   };
 }
 
+async function downloadDirect(job: ActiveJob, outTemplate: string): Promise<void> {
+  try {
+    job.state = DownloadState.DOWNLOADING;
+    activeJobsStore.set(job.id, job);
+
+    const res = await fetch(job.directUrl!, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36" },
+    });
+    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+    const ext = path.extname(new URL(job.directUrl!).pathname).slice(1) || "mp4";
+    const outPath = outTemplate.replace("%(title)s", job.title.replace(/[^a-zA-Z0-9]/g, "_")).replace("%(ext)s", ext);
+    const writer = fs.createWriteStream(outPath);
+    const total = parseInt(res.headers.get("content-length") || "0", 10);
+    let received = 0;
+
+    const reader = res.body.getReader();
+    const pump = async (): Promise<void> => {
+      const { done, value } = await reader.read();
+      if (done) { writer.end(); return; }
+      writer.write(Buffer.from(value));
+      received += value.length;
+      if (total > 0) {
+        job.progress = Math.min(99, Math.round((received / total) * 100));
+        activeJobsStore.set(job.id, job);
+      }
+      return pump();
+    };
+    await pump();
+
+    await new Promise<void>((resolve, reject) => {
+      writer.on("finish", resolve);
+      writer.on("error", reject);
+    });
+
+    job.progress = 100;
+    job.state = DownloadState.COMPLETED;
+    job.filePath = outPath;
+    job.fileName = path.basename(outPath);
+    const stat = fs.statSync(outPath);
+    job.fileSizeLabel = `${(stat.size / (1024 * 1024)).toFixed(1)} MB`;
+    job.downloadUrl = `/api/download/${job.id}`;
+    activeJobsStore.set(job.id, job);
+  } catch (err: any) {
+    job.state = DownloadState.FAILED;
+    job.error = `Direct download failed: ${err.message}`;
+    activeJobsStore.set(job.id, job);
+  }
+}
+
 interface ActiveJob {
   id: string;
   url: string;
@@ -519,6 +650,7 @@ interface ActiveJob {
   speedMbps: number;
   etaSeconds: number;
   fileSizeLabel: string;
+  directUrl?: string;
   error?: string;
   downloadUrl?: string;
   createdAt: number;
@@ -676,6 +808,11 @@ app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
 
       // If no video formats found (audio-only source), just audio
       if (formats.filter(f => f.hasVideo).length === 0) {
+        if (platform === "pinterest") {
+          return res.status(400).json({
+            error: "This Pinterest pin does not contain a downloadable video. Only video pins are supported.",
+          });
+        }
         formats.unshift({
           id: "video_best",
           ext: "mp4",
@@ -698,12 +835,15 @@ app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
         ? (formats.find(f => f.id === "video_mp4_1080p")?.id ?? formats.find(f => f.hasVideo)?.id ?? "audio_mp3_320")
         : (formats.find(f => f.id === "video_mp4_720p")?.id ?? formats.find(f => f.hasVideo)?.id ?? "audio_mp3_320");
 
+      const fallbackThumb = "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=800&auto=format&fit=crop&q=60";
+      const thumbUrl = realMeta.thumbnail;
+      const validThumb = typeof thumbUrl === "string" && /^https?:\/\//i.test(thumbUrl) ? thumbUrl : fallbackThumb;
       const metadata: MediaMetadata = {
         id: realMeta.id ?? extractMediaId(url),
         url,
         platform,
         title: realMeta.title ?? "Untitled",
-        thumbnail: realMeta.thumbnail ?? "",
+        thumbnail: validThumb,
         author: realMeta.uploader ?? realMeta.channel ?? "Unknown",
         authorAvatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(realMeta.uploader ?? "user")}`,
         durationSeconds: durationSec,
@@ -724,7 +864,54 @@ app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
       return res.json(metadata);
     }
 
-    // ── Fallback: mock metadata (when yt-dlp is unavailable) ──────────────
+    // ── If yt-dlp failed, try OG metadata from the page HTML ──────────────
+    const ogMeta = await fetchOgMetadata(url);
+    if (ogMeta) {
+      // Pinterest image pins have no video — reject early instead of showing fake quality options
+      if (platform === "pinterest" && ogMeta.hasVideo === false) {
+        return res.status(400).json({
+          error: "This Pinterest pin does not contain a downloadable video. Only video pins are supported.",
+        });
+      }
+
+      // Build metadata using OG data for title/thumbnail, with generated formats
+      const ffmpegAvail = !!FFMPEG_PATH;
+      const id = extractMediaId(url);
+      // deterministic duration like mock uses
+      let urlHash = 0;
+      for (let i = 0; i < url.length; i++) urlHash = ((urlHash << 5) - urlHash + url.charCodeAt(i)) | 0;
+      const durationSec = 15 + Math.abs(urlHash % 165); // 15-180s
+      const dMin = Math.floor(durationSec / 60);
+      const dSec = (durationSec % 60).toString().padStart(2, "0");
+      const formats = generateFormats(platform, durationSec);
+      const recommendedId = formats.find(f => f.hasVideo)?.id ?? formats[0]?.id ?? "";
+
+      const metadata: MediaMetadata = {
+        id,
+        url,
+        platform,
+        directUrl: ogMeta.ogVideo,
+        title: ogMeta.title || `${platform.charAt(0).toUpperCase() + platform.slice(1)} Video`,
+        thumbnail: ogMeta.thumbnail || "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=800&auto=format&fit=crop&q=60",
+        author: "Unknown",
+        authorAvatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(id || "user")}`,
+        durationSeconds: durationSec,
+        durationLabel: `${dMin}:${dSec}`,
+        uploadDate: new Date().toISOString(),
+        views: 0,
+        likes: 0,
+        description: ogMeta.description || "",
+        tags: [],
+        isLive: false,
+        ffmpegAvailable: ffmpegAvail,
+        formats,
+        recommendedFormatId: recommendedId,
+      };
+
+      return res.json(metadata);
+    }
+
+    // ── Fallback: mock metadata (when all extraction fails) ──────────────
     const metadata = generateMockMetadata(url, platform);
     res.json(metadata);
   } catch (err) {
@@ -1042,7 +1229,7 @@ function generateMockFileContent(ext: string): Buffer {
 }
 
 app.post("/api/jobs/create", downloadLimiter, (req, res) => {
-  const { url, title, thumbnail, platform, formatId, quality, sizeLabel, ext } = req.body;
+  const { url, title, thumbnail, platform, formatId, quality, sizeLabel, ext, directUrl } = req.body;
 
   if (!url || !title || !formatId) {
     return res.status(400).json({ error: "URL, Title, and Format ID are required." });
@@ -1058,6 +1245,7 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     thumbnail: thumbnail || "",
     formatId,
     quality: quality || "1080p",
+    directUrl: directUrl || undefined,
     state: DownloadState.VALIDATING,
     progress: 0,
     speedMbps: 0,
@@ -1098,17 +1286,30 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     requestedHeight, ffmpegAvailable,
   }));
 
+  // Extra retries for flaky platforms (TikTok, Instagram, etc.)
+  const isFlaky = platform === "tiktok" || platform === "instagram" || platform === "pinterest";
+  const isPinterest = platform === "pinterest";
+
   const ytdlpArgs = [
     url,
     "-o", outTemplate,
     "--no-playlist",
     "--newline",
     "--no-check-certificates",
-    "--retries", "3",
+    "--no-warnings",
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+    "--retries", isFlaky ? "8" : "3",
+    "--extractor-retries", isFlaky ? "5" : "3",
+    "--retry-sleep", "2",
     "--format-sort", "res,fps,br,size",
   ];
 
-  if (videoExts.includes(extArg)) {
+  if (isPinterest) {
+    // Pinterest only supports combined streams; restrictive filters (ext, codec, etc.) cause "Requested format is not available"
+    const hFilter = buildHeightFilter(effectiveQuality);
+    ytdlpArgs.push("-f", `best${hFilter}/best`);
+    console.log('[NexLoad] Pinterest format string:', `best${hFilter}/best`);
+  } else if (videoExts.includes(extArg)) {
     const formatStr = buildFormatString(effectiveQuality, extArg, ffmpegAvailable);
     ytdlpArgs.push("-f", formatStr);
     console.log('[NexLoad] Video format string:', formatStr);
@@ -1126,6 +1327,13 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     const formatStr = buildFormatString(effectiveQuality, "mp4", ffmpegAvailable);
     ytdlpArgs.push("-f", formatStr);
     console.log('[NexLoad] Fallback format:', formatStr);
+  }
+
+  // ── If a direct video URL is known (e.g. from OG metadata), skip yt-dlp ──
+  if (activeJob.directUrl) {
+    console.log(`[NexLoad] Downloading direct URL: ${activeJob.directUrl}`);
+    downloadDirect(activeJob, outTemplate);
+    return res.status(202).json({ jobId, message: "Direct download queued." });
   }
 
   console.log(`[NexLoad] yt-dlp command: ${YTDLP_PATH} ${ytdlpArgs.join(" ")}`);

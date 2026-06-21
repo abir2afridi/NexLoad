@@ -348,7 +348,7 @@ function DownloaderDashboard() {
                                 src={job.thumbnail || "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=120&fit=crop"}
                                 alt={job.title}
                                 className="w-10 h-7 object-cover bg-ink/5 shrink-0"
-                                referrerPolicy="no-referrer"
+                                referrerPolicy="no-referrer-when-downgrade"
                               />
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-1.5 mb-0.5">

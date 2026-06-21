@@ -34,6 +34,9 @@ export const MetadataPreview: React.FC = () => {
   const [selectedChapters, setSelectedChapters] = useState<number[]>([]);
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [thumbnailError, setThumbnailError] = useState(false);
+
+  useEffect(() => { setThumbnailError(false); }, [analyzedMetadata?.url]);
 
   // ── Show ALL formats; >720p ones get a warning icon in UI when ffmpeg missing ──
   const filteredFormats: MediaFormat[] = React.useMemo(() => {
@@ -83,6 +86,7 @@ export const MetadataPreview: React.FC = () => {
       quality: selectedFormat.resolution,
       sizeLabel: selectedFormat.sizeLabel || "15.4 MB",
       ext: selectedFormat.ext,
+      directUrl: analyzedMetadata.directUrl,
     };
     console.log('[NexLoad] Starting download with payload:', JSON.stringify(payload));
 
@@ -205,12 +209,24 @@ export const MetadataPreview: React.FC = () => {
         {/* Left: Thumbnail */}
         <div className="lg:col-span-5 flex flex-col gap-4">
           <div className="relative aspect-video overflow-hidden border border-ink/10 bg-ink/[0.02]">
-            <img
-              src={analyzedMetadata.thumbnail}
-              alt={analyzedMetadata.title}
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
+            {thumbnailError ? (
+              <div className="w-full h-full bg-gradient-to-br from-ink/5 to-amber/10 flex items-center justify-center">
+                <div className="text-center p-4">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-ink/10 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-ink/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  </div>
+                  <p className="text-[10px] font-mono text-ink/30">No preview</p>
+                </div>
+              </div>
+            ) : (
+              <img
+                src={analyzedMetadata.thumbnail}
+                alt={analyzedMetadata.title}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer-when-downgrade"
+                onError={() => setThumbnailError(true)}
+              />
+            )}
             <div className="absolute top-3 left-3 bg-cream-dark px-3 py-1 border border-ink/10 text-[10px] font-mono text-ink-light">
                {selectedFormat?.resolution || filteredFormats[0]?.resolution || "HD"}
             </div>

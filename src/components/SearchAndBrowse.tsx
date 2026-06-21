@@ -196,7 +196,7 @@ export const SearchAndBrowse: React.FC = () => {
             src={item.thumbnail}
             alt={item.title}
             className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
+            referrerPolicy="no-referrer-when-downgrade"
           />
           <div className="absolute bottom-2 right-2 bg-cream-dark px-2 py-0.5 border border-sand text-[9px] text-ink-light">
             {item.durationLabel}
@@ -335,7 +335,7 @@ export const SearchAndBrowse: React.FC = () => {
                           src={item.thumbnail}
                           alt={item.title}
                           className="w-16 md:w-20 aspect-video object-cover bg-ink/[0.02] border border-sand"
-                          referrerPolicy="no-referrer"
+                           referrerPolicy="no-referrer-when-downgrade"
                         />
                         <div className="flex-1 min-w-0">
                           <span className="text-[8px] tracking-[0.25em] text-ink-muted bg-ink/[0.03] px-2 py-0.5 border border-sand/20 mb-1 inline-block uppercase">
