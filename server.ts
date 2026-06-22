@@ -690,6 +690,33 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+// Download browser extension as zip
+app.get("/api/download-extension", (_req, res) => {
+  const { execSync } = require("child_process");
+  const extDir = path.join(process.cwd(), "extension");
+  if (!fs.existsSync(extDir)) {
+    return res.status(404).json({ error: "Extension folder not found." });
+  }
+  try {
+    const zipPath = path.join(os.tmpdir(), "nexload-extension.zip");
+    // Create zip from extension folder
+    execSync(`cd "${process.cwd()}" && zip -r "${zipPath}" extension/ -x "*.DS_Store"`, {
+      timeout: 10000,
+      stdio: "ignore",
+    });
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", 'attachment; filename="nexload-extension.zip"');
+    const stream = fs.createReadStream(zipPath);
+    stream.pipe(res);
+    stream.on("end", () => {
+      try { fs.unlinkSync(zipPath); } catch {}
+    });
+  } catch (err: any) {
+    console.error("[NexLoad] Failed to create extension zip:", err.message);
+    res.status(500).json({ error: "Failed to create extension zip." });
+  }
+});
+
 // Upload cookies.txt for YouTube bot bypass
 app.post("/api/cookies", (req, res) => {
   try {

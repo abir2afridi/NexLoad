@@ -18,8 +18,9 @@ import {
   Cookie,
   Check,
   AlertTriangle,
+  Download,
 } from "lucide-react";
-import { apiFetch } from "../lib/api";
+import { apiFetch, apiUrl } from "../lib/api";
 
 const ACCENT_PRESETS = [
   { name: "Editorial Blue", value: "#2563EB" },
@@ -347,6 +348,20 @@ export const SettingsModal: React.FC = () => {
                     {cookiesMessage}
                   </div>
                 )}
+
+                {/* Download Extension */}
+                <div className="border-t border-sand pt-3">
+                  <button
+                    onClick={() => window.open(apiUrl("/api/download-extension"), "_blank")}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-[10px] font-bold border border-amber/40 bg-amber/5 text-amber hover:bg-amber/10 transition-all cursor-pointer uppercase tracking-wider"
+                  >
+                    <Download className="w-3 h-3" />
+                    Download Browser Extension
+                  </button>
+                  <p className="text-[9px] text-ink-muted mt-1.5 text-center">
+                    Chrome/Firefox extension — export YouTube cookies with one click
+                  </p>
+                </div>
 
                 {/* Why Section */}
                 <div className="border-t border-sand pt-3">
