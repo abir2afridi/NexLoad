@@ -351,13 +351,14 @@ export const SettingsModal: React.FC = () => {
 
                 {/* Download Extension */}
                 <div className="border-t border-sand pt-3">
-                  <button
-                    onClick={() => window.open(apiUrl("/api/download-extension"), "_blank")}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-[10px] font-bold border border-amber/40 bg-amber/5 text-amber hover:bg-amber/10 transition-all cursor-pointer uppercase tracking-wider"
+                  <a
+                    href={apiUrl("/api/download-extension")}
+                    download="nexload-extension.zip"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-[10px] font-bold border border-amber/40 bg-amber/5 text-amber hover:bg-amber/10 transition-all cursor-pointer uppercase tracking-wider no-underline"
                   >
                     <Download className="w-3 h-3" />
                     Download Browser Extension
-                  </button>
+                  </a>
                   <p className="text-[9px] text-ink-muted mt-1.5 text-center">
                     Chrome/Firefox extension — export YouTube cookies with one click
                   </p>
