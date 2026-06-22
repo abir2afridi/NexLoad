@@ -11,6 +11,7 @@ RUN npm run build
 FROM node:20-alpine
 RUN apk add --no-cache ffmpeg python3 py3-pip
 RUN pip3 install --break-system-packages --upgrade yt-dlp
+RUN pip3 install --break-system-packages bgutil-ytdlp-pot-provider || true
 WORKDIR /app
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./
@@ -18,6 +19,7 @@ COPY --from=builder /app/package-lock.json ./
 RUN touch cookies.txt
 RUN npm ci --omit=dev
 ENV NODE_ENV=production
+ENV PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 EXPOSE 3000
 USER node
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \

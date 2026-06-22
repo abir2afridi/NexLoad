@@ -266,29 +266,16 @@ function buildFormatString(
   container: string,
   ffmpegAvailable: boolean
 ): string {
-  const hFilter = buildHeightFilter(quality);
   const videoExts = ["mp4", "m4v", "mkv", "webm", "avi", "mov"];
 
   if (videoExts.includes(container)) {
     if (ffmpegAvailable) {
-      // WITH ffmpeg: download best separate streams and merge
-      return [
-        `bestvideo${hFilter}+bestaudio`,
-        `bestvideo+bestaudio`,
-        `best${hFilter}`,
-        `best`,
-      ].join("/");
+      return "bestvideo+bestaudio/best";
     } else {
-      // WITHOUT ffmpeg: only combined streams available (max ~480p on YouTube)
-      return [
-        `best${hFilter}[acodec!=none][vcodec!=none]`,
-        `best${hFilter}`,
-        `best`,
-      ].join("/");
+      return "best[acodec!=none][vcodec!=none]/best";
     }
   }
 
-  // Audio downloads
   return "bestaudio/best";
 }
 
@@ -756,7 +743,7 @@ app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
           "--no-check-certificates",
           "--skip-download",
           "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-          "--extractor-args", "youtube:player_client=ios,web_creator,web",
+          "--extractor-args", "youtube:player_client=web_creator,web",
         ];
         if (currentCookiesPath) args.push("--cookies", currentCookiesPath);
         const proc = spawn(YTDLP_PATH, args, { windowsHide: true });
@@ -1355,7 +1342,7 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     "--retries", isFlaky ? "8" : "3",
     "--extractor-retries", isFlaky ? "5" : "3",
     "--retry-sleep", "2",
-    "--extractor-args", "youtube:player_client=ios,web_creator,web",
+    "--extractor-args", "youtube:player_client=web_creator,web",
   ];
 
   if (currentCookiesPath) {
@@ -1455,8 +1442,70 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
         job.error = "Download completed but file not found on disk.";
       }
     } else {
+      const errMsg = stderrData || `yt-dlp exited with code ${code}`;
+      // Retry with "best" format if format-related error
+      if (errMsg.includes("Requested format") || errMsg.includes("format not available")) {
+        console.log(`[NexLoad] Format error, retrying with 'best' format for ${jobId}`);
+        // Rebuild args without the -f flag, add "best"
+        const retryArgs = [url, "-o", outTemplate, "-f", "best", "--no-playlist", "--newline",
+          "--no-check-certificates", "--no-warnings",
+          "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+          "--retries", "3", "--extractor-retries", "3", "--retry-sleep", "2",
+          "--extractor-args", "youtube:player_client=web_creator,web"];
+        if (currentCookiesPath) retryArgs.push("--cookies", currentCookiesPath);
+        if (FFMPEG_PATH) retryArgs.push("--merge-output-format", "mp4", "--ffmpeg-location", FFMPEG_PATH);
+        const retryProc = spawn(YTDLP_PATH, retryArgs, { windowsHide: true });
+        let retryStderr = "";
+        retryProc.stdout.on("data", (c: Buffer) => {
+          const lines = c.toString().split("\n").filter(Boolean);
+          for (const line of lines) {
+            const pctMatch = line.match(/\[download\]\s+([\d.]+)%/);
+            if (pctMatch && job) {
+              job.progress = parseFloat(pctMatch[1]);
+              job.state = job.progress < 30 ? DownloadState.ANALYZING : DownloadState.DOWNLOADING;
+              activeJobsStore.set(jobId, job);
+            }
+          }
+        });
+        retryProc.stderr.on("data", (c: Buffer) => { retryStderr += c.toString(); });
+        retryProc.on("close", (retryCode) => {
+          const retryJob = activeJobsStore.get(jobId);
+          if (!retryJob) return;
+          if (retryCode === 0) {
+            const files = fs.readdirSync(DOWNLOAD_DIR).filter(f => f.startsWith(jobId)).sort();
+            if (files.length > 0) {
+              const filePath = path.join(DOWNLOAD_DIR, files[0]);
+              const stat = fs.statSync(filePath);
+              retryJob.progress = 100;
+              retryJob.state = DownloadState.COMPLETED;
+              retryJob.speedMbps = 0;
+              retryJob.etaSeconds = 0;
+              retryJob.downloadUrl = `/api/download/${jobId}`;
+              retryJob.filePath = filePath;
+              retryJob.fileName = files[0].replace(new RegExp(`^${jobId}_`), "");
+              retryJob.fileSizeLabel = `${(stat.size / (1024 * 1024)).toFixed(1)} MB`;
+            } else {
+              retryJob.state = DownloadState.FAILED;
+              retryJob.error = "Retry completed but file not found.";
+            }
+          } else {
+            retryJob.state = DownloadState.FAILED;
+            retryJob.error = retryStderr.substring(0, 300) || `Download failed (code ${retryCode}). YouTube may be blocking this request.`;
+          }
+          activeJobsStore.set(jobId, retryJob);
+        });
+        retryProc.on("error", (err) => {
+          const retryJob = activeJobsStore.get(jobId);
+          if (!retryJob) return;
+          retryJob.state = DownloadState.FAILED;
+          retryJob.error = `Retry failed: ${err.message}`;
+          activeJobsStore.set(jobId, retryJob);
+        });
+        return; // Don't fail the original response yet
+      }
+
       job.state = DownloadState.FAILED;
-      job.error = stderrData.substring(0, 200) || `yt-dlp exited with code ${code}`;
+      job.error = stderrData.substring(0, 300) || `yt-dlp exited with code ${code}`;
     }
     activeJobsStore.set(jobId, job);
   });
