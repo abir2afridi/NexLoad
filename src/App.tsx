@@ -32,6 +32,7 @@ import {
   Save,
   FileImage,
 } from "lucide-react";
+import { apiFetch } from "./lib/api";
 
 const HeroSunSVG = () => (
   <svg className="absolute -top-20 -right-20 w-72 h-72 opacity-15 pointer-events-none text-amber" viewBox="0 0 200 200" fill="none">
@@ -165,7 +166,7 @@ function DownloaderDashboard() {
     const pollInterval = setInterval(async () => {
       for (const runningJob of activeRunningJobs) {
         try {
-          const res = await fetch(`/api/jobs/${runningJob.id}`);
+          const res = await apiFetch(`/api/jobs/${runningJob.id}`);
           if (!res.ok) continue;
           const data = await res.json();
           updateJob(runningJob.id, {
@@ -247,7 +248,7 @@ function DownloaderDashboard() {
     setAnalysisError(null);
     setAnalyzedMetadata(null);
     try {
-      const res = await fetch("/api/analyze-url", {
+      const res = await apiFetch("/api/analyze-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: urlInput }),

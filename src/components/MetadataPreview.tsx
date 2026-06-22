@@ -19,6 +19,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { apiFetch } from "../lib/api";
 
 export const MetadataPreview: React.FC = () => {
   const {
@@ -105,7 +106,7 @@ export const MetadataPreview: React.FC = () => {
           };
           console.log('[NexLoad] Playlist item payload:', JSON.stringify(itemPayload));
 
-          const res = await fetch("/api/jobs/create", {
+          const res = await apiFetch("/api/jobs/create", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(itemPayload),
@@ -146,7 +147,7 @@ export const MetadataPreview: React.FC = () => {
         setQueueExpanded(true);
         setAnalyzedMetadata(null);
       } else {
-        const res = await fetch("/api/jobs/create", {
+        const res = await apiFetch("/api/jobs/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),

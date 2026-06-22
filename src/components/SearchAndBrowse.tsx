@@ -7,6 +7,7 @@ import React, { useState, useEffect } from "react";
 import { useAppStore } from "../stores/useAppStore";
 import { getHistoryRecords, deleteHistoryRecord, clearAllHistory, HistoryRecord } from "../lib/db";
 import { Search, Flame, History, Trash2, RefreshCw } from "lucide-react";
+import { apiFetch } from "../lib/api";
 
 interface SearchResult {
   id: string;
@@ -93,7 +94,7 @@ export const SearchAndBrowse: React.FC = () => {
     setActiveTab("search");
 
     try {
-      const res = await fetch("/api/search", {
+      const res = await apiFetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -124,7 +125,7 @@ export const SearchAndBrowse: React.FC = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
 
     try {
-      const res = await fetch("/api/analyze-url", {
+      const res = await apiFetch("/api/analyze-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
