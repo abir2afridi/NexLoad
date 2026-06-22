@@ -366,15 +366,24 @@ export const SettingsModal: React.FC = () => {
                   <div className="flex flex-col gap-2">
                     <div className="flex items-start gap-2">
                       <span className="text-[9px] font-bold text-amber bg-amber/10 px-1.5 py-0.5 border border-amber/20 shrink-0 mt-0.5">1</span>
-                      <p className="text-[10px] text-ink-muted leading-relaxed">
-                        <strong className="text-ink/70">Open your browser</strong> and make sure you are
-                        <strong className="text-ink/70"> logged into YouTube</strong> (a Google account).
-                      </p>
+                      <div className="text-[10px] text-ink-muted leading-relaxed">
+                        <strong className="text-ink/70">Easiest:</strong> Install the{" "}
+                        <a
+                          href="https://github.com/abir2afridi/NexLoad/tree/main/extension"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-amber underline hover:text-ink transition-colors"
+                        >
+                          NexLoad Cookie Exporter
+                        </a>{" "}
+                        browser extension, then click <strong className="text-ink/70">Export cookies.txt</strong>.
+                      </div>
                     </div>
                     <div className="flex items-start gap-2">
                       <span className="text-[9px] font-bold text-amber bg-amber/10 px-1.5 py-0.5 border border-amber/20 shrink-0 mt-0.5">2</span>
                       <div className="text-[10px] text-ink-muted leading-relaxed">
-                        <strong className="text-ink/70">Run this command</strong> in your terminal:
+                        <strong className="text-ink/70">Or manually:</strong> Make sure you are
+                        <strong className="text-ink/70"> logged into YouTube</strong> in your browser, then run:
                         <div className="mt-1.5 p-2 bg-ink/5 border border-sand font-mono text-[9px] text-amber break-all">
                           yt-dlp --cookies-from-browser chrome --cookies cookies.txt "https://www.youtube.com"
                         </div>

@@ -280,20 +280,15 @@ function buildFormatString(
   if (videoExts.includes(container)) {
     if (ffmpegAvailable) {
       // WITH ffmpeg: download best separate streams and merge
-      // YouTube DASH: video stream + audio stream → merged MP4
       return [
-        `bestvideo${hFilter}[ext=mp4]+bestaudio[ext=m4a]`,
-        `bestvideo${hFilter}[ext=mp4]+bestaudio`,
-        `bestvideo${hFilter}+bestaudio[ext=m4a]`,
         `bestvideo${hFilter}+bestaudio`,
-        `best${hFilter}[ext=mp4]`,
+        `bestvideo+bestaudio`,
         `best${hFilter}`,
         `best`,
       ].join("/");
     } else {
       // WITHOUT ffmpeg: only combined streams available (max ~480p on YouTube)
       return [
-        `best${hFilter}[ext=mp4][acodec!=none][vcodec!=none]`,
         `best${hFilter}[acodec!=none][vcodec!=none]`,
         `best${hFilter}`,
         `best`,
@@ -760,7 +755,6 @@ app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
           "--no-check-certificates",
           "--skip-download",
           "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-          "--extractor-args", "youtube:player_client=mweb",
         ];
         if (currentCookiesPath) args.push("--cookies", currentCookiesPath);
         const proc = spawn(YTDLP_PATH, args, { windowsHide: true });
@@ -1359,8 +1353,6 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     "--retries", isFlaky ? "8" : "3",
     "--extractor-retries", isFlaky ? "5" : "3",
     "--retry-sleep", "2",
-    "--format-sort", "res,fps,br,size",
-    "--extractor-args", "youtube:player_client=mweb",
   ];
 
   if (currentCookiesPath) {

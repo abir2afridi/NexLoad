@@ -36,6 +36,14 @@ export const AboutModal: React.FC = () => {
       q: "Can I record Live Streams?",
       a: "Yes. If the channel is detected as live, NexLoad displays a pulsing live indicator and triggers segment-based recording streams up to 10 minutes.",
     },
+    {
+      q: "YouTube says 'Sign in to confirm you're not a bot' — what do I do?",
+      a: "YouTube blocks downloads from cloud server IPs. You need to upload browser cookies to prove you're a real user. Go to Settings → YouTube Cookies → Upload. To generate cookies, install our browser extension or run: yt-dlp --cookies-from-browser chrome --cookies cookies.txt. Cookies expire after ~30 days.",
+    },
+    {
+      q: "Is there a browser extension for cookie export?",
+      a: "Yes! The NexLoad Cookie Exporter extension (Chrome/Firefox) is available in the extension/ folder of our GitHub repo. It exports YouTube cookies with one click and uploads them directly to NexLoad.",
+    },
   ];
 
   return (

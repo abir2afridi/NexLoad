@@ -99,6 +99,37 @@ NexLoad/
 | GET | `/api/platforms` | List supported platforms |
 | POST | `/api/image/info` | Fetch image metadata (dimensions, type, size) |
 | GET | `/api/image/download` | Download/convert image with optional format & quality |
+| POST | `/api/cookies` | Upload YouTube cookies for bot detection bypass |
+| GET | `/api/cookies` | Check cookies status |
+
+## Browser Extension
+
+The `extension/` folder contains a **NexLoad Cookie Exporter** browser extension (Chrome/Firefox).
+
+YouTube blocks downloads from cloud server IPs. This extension exports your browser cookies so NexLoad can bypass bot detection.
+
+### Install (Development)
+
+1. Open Chrome → `chrome://extensions/`
+2. Enable **Developer mode** (top right)
+3. Click **Load unpacked**
+4. Select the `extension/` folder
+5. Extension icon appears in toolbar
+
+### Usage
+
+1. Log into YouTube in your browser
+2. Click the NexLoad extension icon
+3. Click **Export cookies.txt** to download
+4. Go to NexLoad → **Settings** → **YouTube Cookies** → **Upload**
+5. Or click **Upload to NexLoad** for one-click upload (if NexLoad tab is open)
+
+### Features
+
+- One-click YouTube cookie export (Netscape format)
+- Direct upload to NexLoad when tab is open
+- Shows cookie status (active/expired)
+- Explains why cookies are needed
 
 ## Design
 

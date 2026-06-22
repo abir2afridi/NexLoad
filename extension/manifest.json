@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "NexLoad Cookie Exporter",
+  "version": "1.0.2",
+  "description": "Export YouTube cookies for NexLoad — bypass bot detection",
+  "permissions": [
+    "cookies"
+  ],
+  "host_permissions": [
+    "https://*.youtube.com/*",
+    "https://*.google.com/*",
+    "https://*.googlevideo.com/*",
+    "https://*.ytimg.com/*",
+    "https://nex-load.vercel.app/*",
+    "https://*.onrender.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "NexLoad Cookie Exporter"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
