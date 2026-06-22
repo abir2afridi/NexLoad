@@ -32,7 +32,7 @@ import {
   Save,
   FileImage,
 } from "lucide-react";
-import { apiFetch } from "./lib/api";
+import { apiFetch, apiUrl } from "./lib/api";
 
 const HeroSunSVG = () => (
   <svg className="absolute -top-20 -right-20 w-72 h-72 opacity-15 pointer-events-none text-amber" viewBox="0 0 200 200" fill="none">

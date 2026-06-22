@@ -7,7 +7,6 @@ import express from "express";
 import path from "path";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { createServer as createViteServer } from "vite";
 import { spawn, execSync } from "child_process";
 import fs from "fs";
 import os from "os";
@@ -90,6 +89,7 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Max-Age", "86400");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
@@ -111,14 +111,6 @@ app.use(
     crossOriginOpenerPolicy: false,
   })
 );
-
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
-  res.setHeader("Access-Control-Allow-Headers", "X-Requested-With,content-type,Authorization");
-  if (req.method === "OPTIONS") return res.sendStatus(200);
-  next();
-});
 
 const metadataLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -687,7 +679,16 @@ const activeJobsStore = new Map<string, ActiveJob>();
 setInterval(() => {
   const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
   for (const [id, job] of activeJobsStore.entries()) {
-    if (job.createdAt < tenMinutesAgo) activeJobsStore.delete(id);
+    if (job.createdAt < tenMinutesAgo) {
+      // Delete leftover files from disk
+      try {
+        const files = fs.readdirSync(DOWNLOAD_DIR).filter(f => f.startsWith(id));
+        for (const f of files) {
+          try { fs.unlinkSync(path.join(DOWNLOAD_DIR, f)); } catch {}
+        }
+      } catch {}
+      activeJobsStore.delete(id);
+    }
   }
 }, 10 * 60 * 1000);
 
@@ -724,7 +725,7 @@ app.post("/api/cookies", (req, res) => {
 
 // Check cookies status
 app.get("/api/cookies", (_req, res) => {
-  res.json({ active: !!currentCookiesPath, path: currentCookiesPath });
+  res.json({ active: !!currentCookiesPath });
 });
 
 app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
@@ -1492,11 +1493,6 @@ app.get("/favicon.ico", (_req, res) => {
   res.status(204).end();
 });
 
-app.use((err: any, _req: any, res: any, _next: any) => {
-  console.error("Unhandled error:", err);
-  res.status(500).json({ error: "Internal server error. Please try again." });
-});
-
 app.get("/api/jobs/:jobId/progress", (req, res) => {
   const { jobId } = req.params;
 
@@ -1588,6 +1584,10 @@ app.post("/api/image/info", imageLimiter, async (req, res) => {
     new URL(url);
   } catch {
     return res.status(400).json({ error: "Invalid URL format." });
+  }
+
+  if (isSsrfBlocklisted(url)) {
+    return res.status(400).json({ error: "URL is not allowed." });
   }
 
   try {
@@ -1697,6 +1697,10 @@ app.get("/api/image/download", imageLimiter, async (req, res) => {
     new URL(url);
   } catch {
     return res.status(400).json({ error: "Invalid URL format." });
+  }
+
+  if (isSsrfBlocklisted(url)) {
+    return res.status(400).json({ error: "URL is not allowed." });
   }
 
   const targetFormat = (typeof format === "string" ? format : "original").toLowerCase();
@@ -1848,17 +1852,23 @@ async function bootstrap() {
     console.warn("[NexLoad] WARNING: ffmpeg not installed. High-resolution video downloads (>720p) will be rejected.");
   }
 
+  // Global error handler — must be AFTER all routes
+  app.use((err: any, _req: any, res: any, _next: any) => {
+    console.error("Unhandled error:", err);
+    res.status(500).json({ error: "Internal server error. Please try again." });
+  });
+
   // Determine Vite HMR configuration (disable for simplicity to avoid port conflicts)
-  const viteConfig = {
+  const viteConfig: any = {
     server: {
       middlewareMode: true,
-      // Disable HMR to prevent WebSocket port 24678 conflicts in dev mode
       hmr: false,
     },
     appType: "spa",
   };
 
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer(viteConfig);
     app.use(vite.middlewares);
   } else {
@@ -1894,4 +1904,5 @@ async function bootstrap() {
 
 bootstrap().catch((err) => {
   console.error("Server failed to start:", err);
+  process.exit(1);
 });

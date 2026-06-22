@@ -15,7 +15,7 @@ import {
   Check,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { apiFetch, apiUrl } from "../lib/api";
+import { apiFetch } from "../lib/api";
 
 interface ImageInfo {
   url: string;
@@ -104,7 +104,7 @@ export const ImageDownloader: React.FC = () => {
         quality: String(selectedQuality),
       });
 
-      const res = await fetch(apiUrl(`/api/image/download?${params.toString()}`));
+      const res = await apiFetch(`/api/image/download?${params.toString()}`);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || "Download failed.");
