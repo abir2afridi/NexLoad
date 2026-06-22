@@ -755,6 +755,7 @@ app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
           "--no-check-certificates",
           "--skip-download",
           "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+          "--extractor-args", "youtube:player_client=ios,web_creator,web",
         ];
         if (currentCookiesPath) args.push("--cookies", currentCookiesPath);
         const proc = spawn(YTDLP_PATH, args, { windowsHide: true });
@@ -1353,6 +1354,7 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     "--retries", isFlaky ? "8" : "3",
     "--extractor-retries", isFlaky ? "5" : "3",
     "--retry-sleep", "2",
+    "--extractor-args", "youtube:player_client=ios,web_creator,web",
   ];
 
   if (currentCookiesPath) {
