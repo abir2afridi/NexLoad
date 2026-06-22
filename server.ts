@@ -62,6 +62,20 @@ const YTDLP_PATH = (() => {
   return "yt-dlp";
 })();
 
+// Detect cookies.txt for YouTube bot bypass
+const COOKIES_PATH = (() => {
+  const candidates = [
+    path.join(process.cwd(), "cookies.txt"),
+    path.join(process.cwd(), "yt-cookies.txt"),
+    "/app/cookies.txt",
+  ];
+  for (const c of candidates) {
+    try { if (fs.existsSync(c)) { console.log(`[NexLoad] cookies.txt found at: ${c}`); return c; } } catch {}
+  }
+  console.warn("[NexLoad] WARNING: No cookies.txt found — YouTube downloads may be blocked by bot detection.");
+  return null;
+})();
+
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "5mb" }));
 
@@ -715,8 +729,9 @@ app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
           "--no-check-certificates",
           "--skip-download",
           "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-    "--extractor-args", "youtube:player_client=mediaconnect,tv,web_creator",
+          "--extractor-args", "youtube:player_client=mweb",
         ];
+        if (COOKIES_PATH) args.push("--cookies", COOKIES_PATH);
         const proc = spawn(YTDLP_PATH, args, { windowsHide: true });
         let stdout = "";
         let stderr = "";
@@ -1314,8 +1329,12 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     "--extractor-retries", isFlaky ? "5" : "3",
     "--retry-sleep", "2",
     "--format-sort", "res,fps,br,size",
-          "--extractor-args", "youtube:player_client=mediaconnect,tv,web_creator",
+    "--extractor-args", "youtube:player_client=mweb",
   ];
+
+  if (COOKIES_PATH) {
+    ytdlpArgs.push("--cookies", COOKIES_PATH);
+  }
 
   if (isPinterest) {
     // Pinterest only supports combined streams; restrictive filters (ext, codec, etc.) cause "Requested format is not available"
