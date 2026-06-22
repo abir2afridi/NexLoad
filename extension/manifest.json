@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "NexLoad Cookie Exporter",
-  "version": "1.0.2",
-  "description": "Export YouTube cookies for NexLoad — bypass bot detection",
+  "version": "2.0.0",
+  "description": "Export YouTube cookies for NexLoad — shows which websites cookies come from, YouTube priority",
   "permissions": [
     "cookies"
   ],
