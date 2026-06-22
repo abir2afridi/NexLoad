@@ -9,7 +9,7 @@ ENV NODE_ENV=production
 RUN npm run build
 
 FROM node:20-alpine
-RUN apk add --no-cache ffmpeg python3 py3-pip
+RUN apk add --no-cache ffmpeg python3 py3-pip zip
 RUN pip3 install --break-system-packages --upgrade yt-dlp
 RUN pip3 install --break-system-packages bgutil-ytdlp-pot-provider || true
 WORKDIR /app
