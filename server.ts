@@ -947,6 +947,7 @@ app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
         ffmpegAvailable: ffmpegAvail,
         formats,
         recommendedFormatId: recommendedId,
+        isEstimated: true,
       };
 
       return res.json(metadata);
@@ -954,6 +955,7 @@ app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
 
     // ── Fallback: mock metadata (when all extraction fails) ──────────────
     const metadata = generateMockMetadata(url, platform);
+    (metadata as any).isEstimated = true;
     res.json(metadata);
   } catch (err) {
     console.error("URL analysis error:", err);

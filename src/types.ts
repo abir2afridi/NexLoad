@@ -62,6 +62,7 @@ export interface MediaMetadata {
   playlistItems?: PlaylistItem[];
   directUrl?: string;
   ffmpegAvailable?: boolean;
+  isEstimated?: boolean;
 }
 
 
