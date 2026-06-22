@@ -174,7 +174,7 @@ function DownloaderDashboard() {
             progress: data.progress,
             speedMbps: data.speedMbps,
             etaSeconds: data.etaSeconds,
-            downloadUrl: data.downloadUrl,
+            downloadUrl: data.downloadUrl ? apiUrl(data.downloadUrl) : undefined,
             fileSizeLabel: data.fileSizeLabel,
             quality: data.quality,
             error: data.error,

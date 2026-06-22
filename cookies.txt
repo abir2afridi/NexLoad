@@ -1,0 +1,8 @@
+# NexLoad cookies.txt
+
+Place your YouTube cookies.txt file here.
+
+Generate with:
+```
+yt-dlp --cookies-from-browser chrome --cookies cookies.txt "https://www.youtube.com"
+```

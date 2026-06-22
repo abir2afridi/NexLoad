@@ -63,18 +63,23 @@ const YTDLP_PATH = (() => {
 })();
 
 // Detect cookies.txt for YouTube bot bypass
-const COOKIES_PATH = (() => {
+let currentCookiesPath: string | null = null;
+const detectCookies = (): string | null => {
   const candidates = [
     path.join(process.cwd(), "cookies.txt"),
-    path.join(process.cwd(), "yt-cookies.txt"),
+    path.join(os.tmpdir(), "nexload-cookies.txt"),
     "/app/cookies.txt",
+    "/tmp/nexload-cookies.txt",
   ];
   for (const c of candidates) {
-    try { if (fs.existsSync(c)) { console.log(`[NexLoad] cookies.txt found at: ${c}`); return c; } } catch {}
+    try { if (fs.existsSync(c) && fs.statSync(c).size > 50) { console.log(`[NexLoad] cookies.txt found at: ${c}`); return c; } } catch {}
   }
-  console.warn("[NexLoad] WARNING: No cookies.txt found — YouTube downloads may be blocked by bot detection.");
   return null;
-})();
+};
+currentCookiesPath = detectCookies();
+if (!currentCookiesPath) {
+  console.warn("[NexLoad] WARNING: No cookies.txt found — YouTube downloads may be blocked by bot detection. Upload via POST /api/cookies");
+}
 
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "5mb" }));
@@ -697,8 +702,34 @@ app.get("/api/health", (_req, res) => {
     uptime: process.uptime(),
     queueSize: activeJobsStore.size,
     cacheSize: 0,
+    cookies: !!currentCookiesPath,
     time: new Date().toISOString(),
   });
+});
+
+// Upload cookies.txt for YouTube bot bypass
+app.post("/api/cookies", (req, res) => {
+  try {
+    const { cookies } = req.body;
+    if (!cookies || typeof cookies !== "string") {
+      return res.status(400).json({ error: "Missing cookies content in body." });
+    }
+    if (!cookies.includes("youtube.com") && !cookies.includes("google.com")) {
+      return res.status(400).json({ error: "Invalid cookies — must contain YouTube/Google cookies." });
+    }
+    const cookiesPath = path.join(os.tmpdir(), "nexload-cookies.txt");
+    fs.writeFileSync(cookiesPath, cookies, "utf-8");
+    currentCookiesPath = cookiesPath;
+    console.log(`[NexLoad] cookies.txt uploaded and saved to: ${cookiesPath}`);
+    res.json({ status: "ok", message: "Cookies saved. YouTube downloads should work now." });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Check cookies status
+app.get("/api/cookies", (_req, res) => {
+  res.json({ active: !!currentCookiesPath, path: currentCookiesPath });
 });
 
 app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
@@ -731,7 +762,7 @@ app.post("/api/analyze-url", metadataLimiter, async (req, res) => {
           "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
           "--extractor-args", "youtube:player_client=mweb",
         ];
-        if (COOKIES_PATH) args.push("--cookies", COOKIES_PATH);
+        if (currentCookiesPath) args.push("--cookies", currentCookiesPath);
         const proc = spawn(YTDLP_PATH, args, { windowsHide: true });
         let stdout = "";
         let stderr = "";
@@ -1332,8 +1363,8 @@ app.post("/api/jobs/create", downloadLimiter, (req, res) => {
     "--extractor-args", "youtube:player_client=mweb",
   ];
 
-  if (COOKIES_PATH) {
-    ytdlpArgs.push("--cookies", COOKIES_PATH);
+  if (currentCookiesPath) {
+    ytdlpArgs.push("--cookies", currentCookiesPath);
   }
 
   if (isPinterest) {

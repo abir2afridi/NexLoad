@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useAppStore } from "../stores/useAppStore";
 import {
   X,
@@ -15,7 +15,11 @@ import {
   Sun,
   Monitor,
   Terminal,
+  Cookie,
+  Check,
+  AlertTriangle,
 } from "lucide-react";
+import { apiFetch } from "../lib/api";
 
 const ACCENT_PRESETS = [
   { name: "Editorial Blue", value: "#2563EB" },
@@ -39,10 +43,47 @@ export const SettingsModal: React.FC = () => {
     setThemeMode,
   } = useAppStore();
 
+  const [cookiesActive, setCookiesActive] = useState(false);
+  const [cookiesUploading, setCookiesUploading] = useState(false);
+  const [cookiesMessage, setCookiesMessage] = useState<string | null>(null);
+
   useEffect(() => {
     document.documentElement.style.setProperty("--brand-accent", settings.accentColor);
     document.documentElement.style.setProperty("--font-brand-accent", settings.accentColor);
   }, [settings.accentColor]);
+
+  useEffect(() => {
+    apiFetch("/api/cookies").then(r => r.json()).then(d => setCookiesActive(d.active)).catch(() => {});
+  }, []);
+
+  const handleUploadCookies = async () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".txt";
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setCookiesUploading(true);
+      setCookiesMessage(null);
+      try {
+        const text = await file.text();
+        const res = await apiFetch("/api/cookies", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cookies: text }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setCookiesActive(true);
+        setCookiesMessage("Cookies uploaded! YouTube downloads enabled.");
+      } catch (err: any) {
+        setCookiesMessage(err.message);
+      } finally {
+        setCookiesUploading(false);
+      }
+    };
+    input.click();
+  };
 
   if (!isSettingsOpen) return null;
 
@@ -267,6 +308,116 @@ export const SettingsModal: React.FC = () => {
                   }
                   className="bg-cream-dark border border-sand px-3 py-2 text-xs text-ink-light focus:border-amber focus:outline-none w-full"
                 />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <h4 className="label-meta flex items-center gap-2">
+                <Cookie className="w-3 h-3 text-amber" />
+                YouTube Cookies
+              </h4>
+              <div className="card-brutalist-static p-4 flex flex-col gap-4">
+                {/* Status */}
+                <div className="flex items-center justify-between py-1">
+                  <div>
+                    <div className="text-xs text-ink-light flex items-center gap-2">
+                      {cookiesActive ? (
+                        <><Check className="w-3 h-3 text-emerald-500" /> Cookies Active</>
+                      ) : (
+                        <><AlertTriangle className="w-3 h-3 text-amber" /> No Cookies</>
+                      )}
+                    </div>
+                    <div className="text-[9px] text-ink-muted">
+                      {cookiesActive
+                        ? "YouTube downloads enabled"
+                        : "Upload cookies.txt to enable YouTube downloads"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleUploadCookies}
+                    disabled={cookiesUploading}
+                    className="px-3 py-1.5 text-[10px] border border-sand hover:border-amber text-ink-muted hover:text-amber transition-all cursor-pointer uppercase tracking-wider disabled:opacity-50"
+                  >
+                    {cookiesUploading ? "Uploading..." : "Upload"}
+                  </button>
+                </div>
+
+                {cookiesMessage && (
+                  <div className={`text-[10px] ${cookiesMessage.includes("!") ? "text-red" : "text-emerald-600"}`}>
+                    {cookiesMessage}
+                  </div>
+                )}
+
+                {/* Why Section */}
+                <div className="border-t border-sand pt-3">
+                  <h5 className="text-[10px] font-bold text-ink/70 uppercase tracking-wider mb-2">Why are cookies needed?</h5>
+                  <p className="text-[10px] text-ink-muted leading-relaxed">
+                    YouTube actively blocks downloads from cloud servers (AWS, Render, Vercel, etc.)
+                    by flagging their IP addresses as bots. Without cookies, YouTube returns a
+                    <span className="text-amber font-mono"> "Sign in to confirm you're not a bot" </span>
+                    error. Cookies prove to YouTube that the request comes from a real browser session,
+                    bypassing this restriction.
+                  </p>
+                </div>
+
+                {/* How to Generate */}
+                <div className="border-t border-sand pt-3">
+                  <h5 className="text-[10px] font-bold text-ink/70 uppercase tracking-wider mb-2">How to generate cookies.txt</h5>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-start gap-2">
+                      <span className="text-[9px] font-bold text-amber bg-amber/10 px-1.5 py-0.5 border border-amber/20 shrink-0 mt-0.5">1</span>
+                      <p className="text-[10px] text-ink-muted leading-relaxed">
+                        <strong className="text-ink/70">Open your browser</strong> and make sure you are
+                        <strong className="text-ink/70"> logged into YouTube</strong> (a Google account).
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-[9px] font-bold text-amber bg-amber/10 px-1.5 py-0.5 border border-amber/20 shrink-0 mt-0.5">2</span>
+                      <div className="text-[10px] text-ink-muted leading-relaxed">
+                        <strong className="text-ink/70">Run this command</strong> in your terminal:
+                        <div className="mt-1.5 p-2 bg-ink/5 border border-sand font-mono text-[9px] text-amber break-all">
+                          yt-dlp --cookies-from-browser chrome --cookies cookies.txt "https://www.youtube.com"
+                        </div>
+                        <p className="mt-1 text-ink-muted">
+                          Replace <code className="text-amber">chrome</code> with
+                          <code className="text-amber"> firefox</code>,
+                          <code className="text-amber"> edge</code>, or
+                          <code className="text-amber"> brave</code> depending on your browser.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-[9px] font-bold text-amber bg-amber/10 px-1.5 py-0.5 border border-amber/20 shrink-0 mt-0.5">3</span>
+                      <p className="text-[10px] text-ink-muted leading-relaxed">
+                        A <strong className="text-ink/70">cookies.txt</strong> file will be created in your current directory.
+                        Click <strong className="text-amber">Upload</strong> above and select this file.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Important Notes */}
+                <div className="border-t border-sand pt-3">
+                  <h5 className="text-[10px] font-bold text-ink/70 uppercase tracking-wider mb-2">Important notes</h5>
+                  <ul className="flex flex-col gap-1.5">
+                    <li className="flex items-start gap-2 text-[10px] text-ink-muted leading-relaxed">
+                      <span className="text-amber shrink-0">•</span>
+                      <span>Cookies <strong className="text-ink/70">expire after ~30 days</strong>. When YouTube downloads stop working, regenerate and re-upload.</span>
+                    </li>
+                    <li className="flex items-start gap-2 text-[10px] text-ink-muted leading-relaxed">
+                      <span className="text-amber shrink-0">•</span>
+                      <span>You <strong className="text-ink/70">must be logged into YouTube</strong> in the browser before running the command.</span>
+                    </li>
+                    <li className="flex items-start gap-2 text-[10px] text-ink-muted leading-relaxed">
+                      <span className="text-amber shrink-0">•</span>
+                      <span>Uploaded cookies are stored <strong className="text-ink/70">temporarily</strong> on the server. They are lost when the server restarts — you'll need to re-upload.</span>
+                    </li>
+                    <li className="flex items-start gap-2 text-[10px] text-ink-muted leading-relaxed">
+                      <span className="text-amber shrink-0">•</span>
+                      <span><strong className="text-ink/70">Non-YouTube platforms</strong> (TikTok, Instagram, etc.) work without cookies.</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
 
